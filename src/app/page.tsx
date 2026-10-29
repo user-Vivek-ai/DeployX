@@ -139,21 +139,21 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               {/* Search Bar */}
-              <div className="relative">
+              <div className="relative flex-grow sm:flex-grow-0">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search projects or tags..."
-                  className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs bg-white outline-none focus:ring-1 focus:ring-brand-500 w-48 sm:w-60"
+                  className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs bg-white outline-none focus:ring-1 focus:ring-brand-500 w-full sm:w-60"
                 />
               </div>
 
               {/* Status Filter */}
-              <div className="flex items-center space-x-1 bg-white border border-slate-200 p-1 rounded-xl text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between sm:justify-start space-x-1 bg-white border border-slate-200 p-1 rounded-xl text-xs font-semibold text-slate-600 overflow-x-auto">
                 {(['all', 'deployed', 'ready', 'draft'] as const).map((status) => (
                   <button
                     key={status}

@@ -42,17 +42,17 @@ export function DeploymentDrawer({
   };
 
   return (
-    <div className="flex h-full bg-slate-50/60 overflow-hidden text-xs">
-      {/* Deployments List Sidebar */}
-      <div className="w-80 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
-        <div className="p-4 border-b border-slate-200 space-y-3">
+    <div className="flex flex-col md:flex-row h-full bg-slate-50/60 overflow-hidden text-xs">
+      {/* Deployments List Sidebar (Horizontal on small screens, vertical on md+) */}
+      <div className="w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col flex-shrink-0">
+        <div className="p-3 sm:p-4 border-b border-slate-200 space-y-3">
           <div className="flex items-center justify-between">
             <span className="font-bold text-navy-900 flex items-center gap-1.5 text-xs">
               <Rocket className="w-4 h-4 text-brand-600" />
               Deployment Pipeline
             </span>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-              Local Edge Simulator
+              Edge Sandbox
             </span>
           </div>
 
@@ -92,10 +92,10 @@ export function DeploymentDrawer({
         </div>
 
         {/* Deployments History List */}
-        <div className="flex-grow overflow-y-auto p-3 space-y-2">
+        <div className="flex-grow overflow-y-auto p-2.5 sm:p-3 space-y-2 max-h-40 md:max-h-none">
           {deployments.length === 0 ? (
-            <div className="p-6 text-center text-slate-400">
-              <Server className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <div className="p-4 sm:p-6 text-center text-slate-400">
+              <Server className="w-6 h-6 mx-auto mb-1 opacity-50" />
               <p>No deployments triggered yet.</p>
             </div>
           ) : (
@@ -105,7 +105,7 @@ export function DeploymentDrawer({
                 <div
                   key={dep.id}
                   onClick={() => setSelectedDeployment(dep)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-all ${
                     isSelected
                       ? 'bg-brand-50/60 border-brand-300 ring-1 ring-brand-400'
                       : 'bg-white border-slate-200 hover:border-slate-300'
@@ -136,21 +136,21 @@ export function DeploymentDrawer({
       </div>
 
       {/* Deployment Logs & Live URL Inspector */}
-      <div className="flex-grow p-6 overflow-y-auto">
+      <div className="flex-grow p-4 sm:p-6 overflow-y-auto">
         {active ? (
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* Live URL Card - ONLY shown if deployment succeeded */}
+          <div className="max-w-2xl mx-auto space-y-5">
+            {/* Live URL Card */}
             {active.status === 'succeeded' && active.url ? (
-              <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm flex items-center justify-between bg-gradient-to-r from-emerald-50/50 via-white to-white">
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-emerald-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/50 via-white to-white">
                 <div>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full mb-1.5">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
                     <CheckCircle2 className="w-3 h-3" />
                     Verified Live Deployment
                   </span>
-                  <div className="font-mono text-sm font-bold text-navy-900 flex items-center gap-2">
+                  <div className="font-mono text-xs sm:text-sm font-bold text-navy-900 truncate">
                     <span>{active.url}</span>
                   </div>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
+                  <span className="text-[11px] text-slate-500 mt-0.5 block">
                     (Functional Sandbox Simulation - SSL & Edge CDN Verified)
                   </span>
                 </div>
@@ -159,7 +159,7 @@ export function DeploymentDrawer({
                   href={`/projects/${projectId}/preview`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors flex-shrink-0"
                 >
                   <span>Open URL</span>
                   <ExternalLink className="w-4 h-4" />
@@ -179,14 +179,14 @@ export function DeploymentDrawer({
                   Build & Deployment Output Logs
                 </span>
                 <span className="text-[10px] font-mono text-emerald-400">
-                  Exit Code: 0
+                  Exit: 0
                 </span>
               </div>
 
-              <div className="p-4 font-mono text-[11px] text-slate-300 space-y-2 max-h-72 overflow-y-auto">
+              <div className="p-3.5 sm:p-4 font-mono text-[11px] text-slate-300 space-y-1.5 max-h-60 sm:max-h-72 overflow-y-auto">
                 {active.logs?.map((log, i) => (
                   <div key={i} className="flex items-start space-x-2 leading-relaxed">
-                    <span className="text-slate-500 select-none">[{log.timestamp}]</span>
+                    <span className="text-slate-500 select-none hidden xs:inline">[{log.timestamp}]</span>
                     <span
                       className={`font-semibold ${
                         log.level === 'success'
@@ -198,7 +198,7 @@ export function DeploymentDrawer({
                     >
                       [{log.step.toUpperCase()}]
                     </span>
-                    <span className="text-slate-200">{log.message}</span>
+                    <span className="text-slate-200 break-all">{log.message}</span>
                   </div>
                 ))}
               </div>

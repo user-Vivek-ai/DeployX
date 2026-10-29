@@ -118,7 +118,7 @@ export function ChatBuilder({
 
                 {/* Message Body */}
                 <div
-                  className={`max-w-[85%] rounded-2xl p-4 shadow-sm border ${
+                  className={`max-w-[92%] sm:max-w-[85%] rounded-2xl p-3 sm:p-4 shadow-sm border ${
                     isUser
                       ? 'bg-navy-900 text-white border-navy-800 rounded-tr-none'
                       : 'bg-white text-slate-800 border-slate-200 rounded-tl-none'
@@ -229,26 +229,26 @@ export function ChatBuilder({
       </div>
 
       {/* Input Bar */}
-      <div className="p-3.5 bg-slate-50/70 border-t border-slate-200 flex-shrink-0">
+      <div className="p-2.5 sm:p-3.5 bg-slate-50/70 border-t border-slate-200 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             disabled={isLoading}
-            placeholder="Describe what you want to change, e.g. 'Add customer reviews' or 'Change primary color to emerald'..."
-            className="flex-grow px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:opacity-50"
+            placeholder="Describe changes, e.g. 'Add customer reviews' or 'Change color to emerald'..."
+            className="flex-grow px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!inputPrompt.trim() || isLoading}
-            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white font-semibold rounded-xl text-xs shadow-sm transition-all flex items-center justify-center space-x-1"
+            className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white font-semibold rounded-xl text-xs shadow-sm transition-all flex items-center justify-center space-x-1 flex-shrink-0"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span>Send</span>
+                <span className="hidden xs:inline">Send</span>
                 <Send className="w-3.5 h-3.5" />
               </>
             )}

@@ -54,12 +54,11 @@ export function VersionHistory({
   };
 
   return (
-    <div className="flex h-full bg-slate-50/60 overflow-hidden text-xs">
-      {/* Version Timeline Sidebar */}
-      <div className="w-80 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-200">
-          <div className="flex items-center space-x-2 text-navy-900 font-bold mb-3">
+    <div className="flex flex-col md:flex-row h-full bg-slate-50/60 overflow-hidden text-xs">
+      {/* Version Timeline (Top on mobile, sidebar on md+) */}
+      <div className="w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col flex-shrink-0">
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          <div className="flex items-center space-x-2 text-navy-900 font-bold mb-2.5">
             <History className="w-4 h-4 text-brand-600" />
             <span>Version History & Rollbacks</span>
           </div>
@@ -84,10 +83,10 @@ export function VersionHistory({
         </div>
 
         {/* Version List */}
-        <div className="flex-grow overflow-y-auto p-3 space-y-2">
+        <div className="flex-grow overflow-y-auto p-2.5 sm:p-3 space-y-2 max-h-44 md:max-h-none">
           {versions.length === 0 ? (
-            <div className="p-6 text-center text-slate-400">
-              <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <div className="p-4 sm:p-6 text-center text-slate-400">
+              <History className="w-6 h-6 mx-auto mb-1 opacity-50" />
               <p>No snapshots recorded yet.</p>
             </div>
           ) : (
@@ -99,7 +98,7 @@ export function VersionHistory({
                 <div
                   key={ver.id}
                   onClick={() => setSelectedVersion(ver)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-all ${
                     isSelected
                       ? 'bg-brand-50/60 border-brand-300 ring-1 ring-brand-400'
                       : 'bg-white border-slate-200 hover:border-slate-300'
@@ -117,11 +116,11 @@ export function VersionHistory({
                     )}
                   </div>
 
-                  <p className="text-slate-600 font-medium line-clamp-2 mt-1">
+                  <p className="text-slate-600 font-medium line-clamp-2 mt-0.5">
                     {ver.message}
                   </p>
 
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatTimeAgo(ver.timestamp)}
@@ -139,24 +138,24 @@ export function VersionHistory({
       </div>
 
       {/* Version Details / Inspector */}
-      <div className="flex-grow p-6 overflow-y-auto">
+      <div className="flex-grow p-4 sm:p-6 overflow-y-auto">
         {selectedVersion ? (
-          <div className="max-w-xl mx-auto space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+          <div className="max-w-xl mx-auto space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-slate-200 gap-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600">
                   Snapshot Inspector
                 </span>
-                <h3 className="font-bold text-lg text-navy-900 mt-0.5">
+                <h3 className="font-bold text-base sm:text-lg text-navy-900 mt-0.5">
                   Version #{selectedVersion.versionNumber}
                 </h3>
-                <p className="text-slate-500 mt-1">{selectedVersion.message}</p>
+                <p className="text-slate-500 mt-0.5">{selectedVersion.message}</p>
               </div>
 
               <button
                 onClick={() => handleRestore(selectedVersion)}
                 disabled={isRestoring}
-                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded-xl font-semibold shadow-sm flex items-center gap-1.5 transition-all"
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded-xl font-semibold shadow-sm flex items-center justify-center gap-1.5 transition-all flex-shrink-0"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>{isRestoring ? 'Restoring...' : 'Revert to this Version'}</span>
@@ -164,7 +163,7 @@ export function VersionHistory({
             </div>
 
             {/* Preserved Files in Snapshot */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
               <span className="font-bold text-xs uppercase tracking-wider text-slate-400">
                 Preserved Files in this Version ({selectedVersion.files?.length || 0})
               </span>
@@ -173,13 +172,13 @@ export function VersionHistory({
                 {selectedVersion.files?.map((file) => (
                   <div
                     key={file.path}
-                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between font-mono text-[11px]"
+                    className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between font-mono text-[11px]"
                   >
-                    <span className="text-slate-700 flex items-center gap-1.5">
-                      <FileCode className="w-3.5 h-3.5 text-slate-400" />
-                      {file.path}
+                    <span className="text-slate-700 flex items-center gap-1.5 truncate">
+                      <FileCode className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{file.path}</span>
                     </span>
-                    <span className="text-slate-400 text-[10px]">
+                    <span className="text-slate-400 text-[10px] flex-shrink-0 ml-2">
                       {file.content?.length || 0} bytes
                     </span>
                   </div>
@@ -188,10 +187,10 @@ export function VersionHistory({
             </div>
 
             {/* Safety Guarantee Notice */}
-            <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-100 text-indigo-900 text-xs flex items-start space-x-2.5">
+            <div className="p-3.5 sm:p-4 bg-indigo-50/70 rounded-2xl border border-indigo-100 text-indigo-900 text-xs flex items-start space-x-2.5">
               <CheckCircle2 className="w-4 h-4 text-brand-600 mt-0.5 flex-shrink-0" />
               <div>
-                <span className="font-bold">Zero-Risk Rollbacks:</span> DeployX automatically captures a safety snapshot of your active project before restoring earlier code. You can revert back at any time.
+                <span className="font-bold">Zero-Risk Rollbacks:</span> DeployX automatically captures a safety snapshot before restoring earlier code.
               </div>
             </div>
           </div>

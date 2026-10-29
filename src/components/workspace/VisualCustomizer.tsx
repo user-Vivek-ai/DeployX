@@ -57,16 +57,16 @@ export function VisualCustomizer({
   };
 
   return (
-    <div className="h-full bg-slate-50/50 p-6 overflow-y-auto">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="h-full bg-slate-50/50 p-3.5 sm:p-6 overflow-y-auto">
+      <div className="max-w-2xl mx-auto space-y-5 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-slate-200 gap-3">
           <div>
-            <h3 className="font-bold text-navy-900 text-base flex items-center gap-2">
+            <h3 className="font-bold text-navy-900 text-sm sm:text-base flex items-center gap-2">
               <Palette className="w-5 h-5 text-brand-600" />
               DeployX Visual Studio & Style Controls
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
               Instantly customize layout, branding, typography, and module toggles without touching code.
             </p>
           </div>
