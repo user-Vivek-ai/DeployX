@@ -88,9 +88,10 @@ Questions should be specific to: "${prompt}"`;
     const { prompt, clarifications } = request;
 
     // Build clarification context
-    const clarificationText = clarifications && clarifications.length > 0
+    const clarificationEntries = clarifications ? Object.entries(clarifications) : [];
+    const clarificationText = clarificationEntries.length > 0
       ? '\n\nUser answered these follow-up questions:\n' +
-        clarifications.map(c => `- ${c.questionId}: ${c.answer}`).join('\n')
+        clarificationEntries.map(([q, a]) => `- ${q}: ${a}`).join('\n')
       : '';
 
     const systemPrompt = `You are DeployX, an expert web developer AI. Build a complete, beautiful, production-quality website based on this request:
