@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Plus,
@@ -43,9 +43,6 @@ import { PreviewRuntime } from '@/lib/preview-runtime';
 
 export default function ClaudeAppPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedProjectId = searchParams.get('p');
-
   const { user, logout, isLoading: isAuthLoading } = useAuth();
 
   // State
@@ -97,22 +94,24 @@ export default function ClaudeAppPage() {
 
   useEffect(() => {
     if (user) {
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const requestedId = urlParams ? urlParams.get('p') : null;
+
       fetchProjects().then(projs => {
-        if (requestedProjectId) {
-          const match = projs.find(p => p.id === requestedProjectId);
+        if (requestedId) {
+          const match = projs.find(p => p.id === requestedId);
           if (match) {
             setCurrentProject(match);
           } else {
-            // Check localStorage
             try {
-              const cached = localStorage.getItem(`deployx_proj_${requestedProjectId}`);
+              const cached = localStorage.getItem(`deployx_proj_${requestedId}`);
               if (cached) setCurrentProject(JSON.parse(cached));
             } catch {}
           }
         }
       });
     }
-  }, [user, requestedProjectId]);
+  }, [user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
