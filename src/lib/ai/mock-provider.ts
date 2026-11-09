@@ -218,6 +218,31 @@ export class MockAIProvider {
 
     let changeSummary = 'Refined code based on prompt.';
 
+    // Currency conversion
+    if (lower.includes('rupee') || lower.includes('inr') || lower.includes('india') || lower.includes('₹') || lower.includes('rs')) {
+      indexHtml = indexHtml
+        .replace(/\$149(?:\/mo)?/g, '₹5,999/mo')
+        .replace(/\$89(?:\/mo)?/g, '₹3,499/mo')
+        .replace(/\$49(?:\/mo)?/g, '₹1,999/mo')
+        .replace(/\$29(?:\/mo)?/g, '₹1,499/mo')
+        .replace(/\$79(?:\/mo)?/g, '₹2,999/mo')
+        .replace(/\$199(?:\/mo)?/g, '₹7,999/mo')
+        .replace(/\$95(?:\/guest)?/g, '₹2,500/guest')
+        .replace(/\$450/g, '₹15,000')
+        .replace(/\$65/g, '₹1,200')
+        .replace(/\$120/g, '₹2,500')
+        .replace(/\$350\/yr/g, '₹7,500/yr')
+        .replace(/\$25(?:\.00)?/g, '₹500')
+        .replace(/\$(\d+)/g, '₹$1');
+      changeSummary = 'Updated all pricing and membership rates to Indian Rupee (₹ INR).';
+    } else if (lower.includes('euro') || lower.includes('eur') || lower.includes('€')) {
+      indexHtml = indexHtml.replace(/\$(\d+)/g, '€$1');
+      changeSummary = 'Updated currency to Euro (€).';
+    } else if (lower.includes('pound') || lower.includes('gbp') || lower.includes('£')) {
+      indexHtml = indexHtml.replace(/\$(\d+)/g, '£$1');
+      changeSummary = 'Updated currency to British Pound (£).';
+    }
+
     // Check for color change
     if (lower.includes('emerald') || lower.includes('green')) {
       stylesCss = stylesCss.replace(/--primary-color:\s*#[a-fA-F0-9]{6};/g, '--primary-color: #10b981;');
