@@ -377,7 +377,11 @@ export default function DashboardPage() {
       {/* New Project Modal */}
       <NewProjectModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        initialPrompt={quickPrompt}
+        onClose={() => {
+          setIsModalOpen(false);
+          setQuickPrompt('');
+        }}
       />
     </div>
   );
