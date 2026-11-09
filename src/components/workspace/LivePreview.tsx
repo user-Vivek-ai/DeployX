@@ -10,7 +10,9 @@ import {
   AlertTriangle,
   Wrench,
   CheckCircle2,
-  Maximize2
+  Maximize2,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { ProjectFile } from '@/lib/types';
 import { PreviewRuntime } from '@/lib/preview-runtime';
@@ -159,19 +161,42 @@ export function LivePreview({
       )}
 
       {/* Responsive Viewport Container */}
-      <div className="flex-grow overflow-auto p-2 sm:p-4 flex justify-center items-start">
-        <div
-          className={`h-full bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 flex flex-col ${getViewportClass()}`}
-        >
-          <iframe
-            key={key}
-            ref={iframeRef}
-            srcDoc={srcDoc}
-            title="DeployX Live Preview"
-            sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-            className="w-full flex-grow border-0 min-h-[420px]"
-          />
-        </div>
+      <div className="flex-grow overflow-auto p-2 sm:p-4 flex justify-center items-center">
+        {(!files || files.length === 0 || !files.some(f => f.path === 'index.html' || f.path.endsWith('.html'))) ? (
+          <div className="w-full max-w-md bg-[#171717] rounded-3xl border border-white/10 p-8 text-center flex flex-col items-center justify-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/30">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Generate Website with Gemini AI</h3>
+              <p className="text-xs text-slate-400 mt-1.5 max-w-xs leading-relaxed">
+                Describe your desired website in the chat on the left, or tap below to generate it right now.
+              </p>
+            </div>
+            {onRepairRequest && (
+              <button
+                onClick={() => onRepairRequest('Generate complete responsive modern website with hero, features, and contact sections')}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-brand-600/30 transition-all flex items-center gap-2 active:scale-95"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Generate Website with Gemini</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`h-full bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 flex flex-col ${getViewportClass()}`}
+          >
+            <iframe
+              key={key}
+              ref={iframeRef}
+              srcDoc={srcDoc}
+              title="DeployX Live Preview"
+              sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
+              className="w-full flex-grow border-0 min-h-[420px]"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

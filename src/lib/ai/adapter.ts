@@ -76,8 +76,8 @@ export class OpenAIProvider implements IAIProvider {
 
 export class AIProviderFactory {
   public static getProvider(type: AIProviderType = 'auto'): IAIProvider {
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
     // Gemini first (free tier, best for this use case)
@@ -104,9 +104,10 @@ export class AIProviderFactory {
     isSimulated: boolean;
     available: Array<{ id: AIProviderType; name: string; configured: boolean }>;
   } {
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const geminiConfigured = Boolean(geminiKey && !geminiKey.includes('placeholder'));
     const openaiConfigured = Boolean(process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder'));
     const anthropicConfigured = Boolean(process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY.includes('placeholder'));
-    const geminiConfigured = Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('placeholder'));
 
     const provider = this.getProvider('auto');
 

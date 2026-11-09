@@ -13,9 +13,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing projectId or prompt' }, { status: 400 });
     }
 
-    const project = ProjectStore.getProject(projectId);
+    let project = ProjectStore.getProject(projectId);
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      project = ProjectStore.createProject({
+        name: prompt.slice(0, 36) || 'New Project',
+        description: prompt,
+        initialPrompt: prompt
+      });
+      project.id = projectId;
+      ProjectStore.saveProject(project);
     }
 
     const provider = AIProviderFactory.getProvider(project.aiProvider);

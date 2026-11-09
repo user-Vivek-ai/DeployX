@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { Project, ProjectFile, VersionSnapshot, Deployment, DeploymentLog } from './types';
 import { MockAIProvider } from './ai/mock-provider';
 
-const DATA_FILE = path.join(process.cwd(), '.deployx_data.json');
+// Use os.tmpdir() to ensure write permissions on Vercel serverless functions
+const DATA_FILE = path.join(os.tmpdir(), '.deployx_data.json');
 
 export class ProjectStore {
   private static projects: Map<string, Project> = new Map();

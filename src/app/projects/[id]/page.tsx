@@ -51,6 +51,24 @@ export default function ProjectWorkspacePage() {
   // Responsive device view controls
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview' | 'code' | 'visual' | 'deploy' | 'settings'>('chat');
   const [desktopSplit, setDesktopSplit] = useState<'split' | 'fullPreview' | 'fullChat'>('split');
+  const [aiProviderInfo, setAiProviderInfo] = useState<{ name: string; isSimulated: boolean }>({
+    name: 'Google Gemini 1.5 Flash',
+    isSimulated: false
+  });
+
+  useEffect(() => {
+    fetch('/api/status')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.ai) {
+          setAiProviderInfo({
+            name: d.ai.activeProvider || 'Google Gemini 1.5 Flash',
+            isSimulated: d.ai.isMock ?? false
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Load project
   const loadProject = async () => {
@@ -58,8 +76,43 @@ export default function ProjectWorkspacePage() {
       const res = await fetch(`/api/projects/${projectId}`);
       if (!res.ok) throw new Error('Project not found');
       const data = await res.json();
-      setProject(data.project);
+      let proj = data.project;
+
+      // Fallback to localStorage if server project has empty files
+      if (!proj.files || proj.files.length === 0) {
+        try {
+          const cached = localStorage.getItem(`deployx_proj_${projectId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.files && parsed.files.length > 0) {
+              proj = parsed;
+            }
+          }
+        } catch {}
+      }
+
+      setProject(proj);
+      try {
+        localStorage.setItem(`deployx_proj_${projectId}`, JSON.stringify(proj));
+      } catch {}
+
+      // Auto-trigger generation if project has zero files and prompt is available
+      if ((!proj.files || proj.files.length === 0) && (proj.initialPrompt || proj.description)) {
+        setTimeout(() => {
+          handleSendMessage(proj.initialPrompt || proj.description);
+        }, 150);
+      }
     } catch {
+      // Check localStorage before redirecting
+      try {
+        const cached = localStorage.getItem(`deployx_proj_${projectId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setProject(parsed);
+          setIsLoading(false);
+          return;
+        }
+      } catch {}
       router.push('/');
     } finally {
       setIsLoading(false);
@@ -92,11 +145,18 @@ export default function ProjectWorkspacePage() {
       const res = await fetch('/api/ai/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: project.id, prompt })
+        body: JSON.stringify({
+          projectId: project.id,
+          prompt,
+          currentFiles: project.files
+        })
       });
       const data = await res.json();
       if (data.success && data.project) {
         setProject(data.project);
+        try {
+          localStorage.setItem(`deployx_proj_${project.id}`, JSON.stringify(data.project));
+        } catch {}
         if (window.innerWidth < 1024) {
           setMobileTab('preview');
         }
@@ -413,6 +473,8 @@ export default function ProjectWorkspacePage() {
                     messages={project.messages || []}
                     onSendMessage={handleSendMessage}
                     isLoading={isChatLoading}
+                    activeProviderName={aiProviderInfo.name}
+                    isSimulated={aiProviderInfo.isSimulated}
                   />
                 </div>
               )}
@@ -495,6 +557,8 @@ export default function ProjectWorkspacePage() {
               messages={project.messages || []}
               onSendMessage={handleSendMessage}
               isLoading={isChatLoading}
+              activeProviderName={aiProviderInfo.name}
+              isSimulated={aiProviderInfo.isSimulated}
             />
           )}
 

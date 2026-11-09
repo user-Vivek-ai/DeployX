@@ -6,24 +6,47 @@ import { ProjectFile, ChatMessage } from '@/lib/types';
 
 export async function POST(req: Request) {
   try {
-    const { projectId, prompt } = await req.json();
+    const { projectId, prompt, currentFiles } = await req.json();
 
     if (!projectId || !prompt) {
       return NextResponse.json({ error: 'Missing projectId or prompt' }, { status: 400 });
     }
 
-    const project = ProjectStore.getProject(projectId);
+    let project = ProjectStore.getProject(projectId);
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      project = ProjectStore.createProject({
+        name: prompt.slice(0, 36) || 'Project',
+        description: prompt,
+        initialPrompt: prompt
+      });
+      project.id = projectId;
+      if (currentFiles && Array.isArray(currentFiles)) {
+        project.files = currentFiles;
+      }
+      ProjectStore.saveProject(project);
+    } else if (currentFiles && Array.isArray(currentFiles) && currentFiles.length > 0 && project.files.length === 0) {
+      project.files = currentFiles;
     }
 
-    const provider = AIProviderFactory.getProvider(project.aiProvider);
-    const result = await provider.refine(prompt, project.files, {
-      projectId,
-      prompt,
-      currentFiles: project.files,
-      visualConfig: project.visualConfig
-    });
+    const provider = AIProviderFactory.getProvider('auto');
+
+    // If project has no files yet, generate initial code instead of refining empty files!
+    const hasHtml = project.files.some(f => f.path === 'index.html' || f.path.endsWith('.html'));
+    let result;
+    if (!hasHtml || project.files.length === 0) {
+      result = await provider.generate({
+        projectId,
+        prompt,
+        visualConfig: project.visualConfig
+      });
+    } else {
+      result = await provider.refine(prompt, project.files, {
+        projectId,
+        prompt,
+        currentFiles: project.files,
+        visualConfig: project.visualConfig
+      });
+    }
 
     const validation = CodeSecurityValidator.validateGeneratedFiles(result.files);
     if (!validation.valid) {
@@ -34,10 +57,11 @@ export async function POST(req: Request) {
     }
 
     // Auto-save snapshot of current version before applying modification
-    ProjectStore.addVersionSnapshot(projectId, `Before edit: "${prompt.slice(0, 40)}"`, 'User Edit');
+    ProjectStore.addVersionSnapshot(projectId, `Edit: "${prompt.slice(0, 40)}"`, 'User Edit');
 
     // Update project state
     project.files = validation.sanitized;
+    project.status = 'ready';
 
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}_u`,

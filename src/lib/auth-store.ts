@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 
 export interface UserAccount {
@@ -22,7 +23,7 @@ interface PendingRegistration {
   rawCodeForDemo?: string;
 }
 
-const USERS_FILE = path.join(process.cwd(), '.deployx_users.json');
+const USERS_FILE = path.join(os.tmpdir(), '.deployx_users.json');
 
 export function validatePassword(password: string): {
   valid: boolean;

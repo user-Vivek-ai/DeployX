@@ -44,13 +44,13 @@ export function NewProjectModal({ isOpen, onClose, initialPrompt = '' }: NewProj
     if (!prompt.trim() || isCreating) return;
 
     setIsCreating(true);
-    setCreationStep('Initializing project workspace...');
+    setCreationStep('Gemini 1.5 is writing HTML, CSS & JavaScript for your website...');
 
     try {
       // 1. Auto-generate project name if not specified
       const name = projectName.trim() || prompt.slice(0, 36).trim() || 'New Gemini Project';
 
-      // 2. Create the project record
+      // 2. Create the project record AND synthesize code in one single request
       const createRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,25 +69,16 @@ export function NewProjectModal({ isOpen, onClose, initialPrompt = '' }: NewProj
       const createData = await createRes.json();
       const project = createData.project;
 
-      // 3. Immediately synthesize code with Gemini
-      setCreationStep('Gemini 1.5 Flash is writing HTML, CSS & JavaScript...');
-
-      const generateRes = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: project.id,
-          prompt
-        })
-      });
-
-      if (!generateRes.ok) {
-        console.warn('Initial generation returned status:', generateRes.status);
-      }
+      // Cache project in localStorage for resilience across serverless lambdas
+      try {
+        if (project && project.id) {
+          localStorage.setItem(`deployx_proj_${project.id}`, JSON.stringify(project));
+        }
+      } catch {}
 
       setCreationStep('Launching live preview workspace...');
 
-      // 4. Redirect straight to the builder workspace
+      // 3. Redirect straight to the builder workspace
       onClose();
       router.push(`/projects/${project.id}`);
     } catch (err: any) {
