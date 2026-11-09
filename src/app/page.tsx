@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Plus,
@@ -19,7 +20,10 @@ import {
   FolderGit2,
   CheckCircle2,
   RefreshCw,
-  Loader2
+  Loader2,
+  ArrowUp,
+  Zap,
+  Bot
 } from 'lucide-react';
 import { Project } from '@/lib/types';
 import { PROJECT_TEMPLATES, ProjectTemplate } from '@/lib/templates';
@@ -30,10 +34,12 @@ import { useAuth } from '@/lib/auth-context';
 import { AuthPortal } from '@/components/auth/AuthPortal';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'deployed' | 'ready' | 'draft'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,9 +85,37 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLaunchQuickPrompt = () => {
-    if (!quickPrompt.trim()) return;
-    setIsModalOpen(true);
+  const handleLaunchQuickPrompt = async (promptOverride?: string) => {
+    const text = (promptOverride || quickPrompt).trim();
+    if (!text) {
+      setIsModalOpen(true);
+      return;
+    }
+
+    setIsSynthesizing(true);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: text.slice(0, 32),
+          description: text,
+          initialPrompt: text,
+          tags: ['AI Generated', 'Gemini 1.5']
+        })
+      });
+      const data = await res.json();
+      if (data.project) {
+        try {
+          localStorage.setItem(`deployx_proj_${data.project.id}`, JSON.stringify(data.project));
+        } catch {}
+        router.push(`/projects/${data.project.id}`);
+      }
+    } catch {
+      setIsModalOpen(true);
+    } finally {
+      setIsSynthesizing(false);
+    }
   };
 
   const filteredProjects = projects.filter(p => {
@@ -145,27 +179,66 @@ export default function DashboardPage() {
               From artisan restaurant websites with real-time table reservations to SaaS platforms with Stripe billing and two-factor OTP security.
             </p>
 
-            {/* ChatGPT-style Sleek Light-Black Prompt Bar */}
-            <div className="mt-7 max-w-2xl mx-auto bg-[#1c1c1c] p-2 sm:p-2.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-white/10 flex flex-col sm:flex-row items-center gap-2 ring-1 ring-white/5">
-              <div className="flex items-center space-x-2.5 px-3 flex-grow w-full">
-                <Wand2 className="w-5 h-5 text-brand-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  value={quickPrompt}
-                  onChange={(e) => setQuickPrompt(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLaunchQuickPrompt()}
-                  placeholder="e.g. Build an artisan restaurant with table bookings and online payments..."
-                  className="w-full text-xs sm:text-sm bg-transparent outline-none placeholder:text-slate-500 text-white"
-                />
-              </div>
+            {/* Claude-Style Minimalist Floating Prompt Box */}
+            <div className="mt-8 max-w-2xl mx-auto bg-[#171717] rounded-3xl p-3 sm:p-4 shadow-2xl border border-white/10 ring-1 ring-white/5 text-left space-y-3">
+              <textarea
+                rows={3}
+                value={quickPrompt}
+                onChange={(e) => setQuickPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleLaunchQuickPrompt();
+                  }
+                }}
+                disabled={isSynthesizing}
+                placeholder="How can DeployX help you build today? (e.g. Build an anime streaming landing page with dark neon aesthetic and video carousel...)"
+                className="w-full bg-transparent px-3 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 outline-none resize-none leading-relaxed"
+              />
 
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md shadow-brand-600/20 hover:shadow-lg transition-all flex items-center justify-center space-x-1.5 flex-shrink-0"
-              >
-                <span>Synthesize with AI</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center justify-between pt-2 border-t border-white/5 px-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Google Gemini 1.5 Flash</span>
+                </div>
+
+                <button
+                  onClick={() => handleLaunchQuickPrompt()}
+                  disabled={!quickPrompt.trim() || isSynthesizing}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 disabled:opacity-40 text-white font-bold text-xs shadow-lg shadow-brand-600/30 transition-all flex items-center gap-2 active:scale-95"
+                >
+                  {isSynthesizing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Building Website...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Generate</span>
+                      <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Inspiration Pills */}
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 max-w-2xl mx-auto">
+              {[
+                { label: '🏋️ Fitness Gym', prompt: 'Build a modern fitness gym website with membership plans, trainer profiles, and workout schedule.' },
+                { label: '📸 Photography Portfolio', prompt: 'Build a dark minimalist photography portfolio with gallery grid and client contact.' },
+                { label: '🍽️ Artisan Restaurant', prompt: 'Build an upscale farm-to-table restaurant website with online table reservations.' },
+                { label: '🚀 SaaS Cloud Platform', prompt: 'Build a high-converting developer SaaS landing page with pricing plans and FAQ.' }
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  disabled={isSynthesizing}
+                  onClick={() => handleLaunchQuickPrompt(chip.prompt)}
+                  className="px-3 py-1.5 rounded-full text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all active:scale-95 text-left"
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
