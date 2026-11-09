@@ -6,6 +6,7 @@ import {
   ProjectFile
 } from '../types';
 import { MockAIProvider } from './mock-provider';
+import { GeminiProvider } from './gemini-provider';
 
 export interface IAIProvider {
   name: string;
@@ -76,8 +77,13 @@ export class OpenAIProvider implements IAIProvider {
 export class AIProviderFactory {
   public static getProvider(type: AIProviderType = 'auto'): IAIProvider {
     const openaiKey = process.env.OPENAI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+    // Gemini first (free tier, best for this use case)
+    if (geminiKey && !geminiKey.includes('placeholder')) {
+      return new GeminiProvider(geminiKey);
+    }
 
     if (type === 'openai' && openaiKey && !openaiKey.includes('placeholder')) {
       return new OpenAIProvider(openaiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
@@ -89,7 +95,7 @@ export class AIProviderFactory {
       }
     }
 
-    // Default to high-fidelity Mock provider
+    // Default to Mock provider if no key configured
     return new MockAIProvider();
   }
 
@@ -109,9 +115,9 @@ export class AIProviderFactory {
       isSimulated: provider.isSimulated,
       available: [
         { id: 'mock', name: 'Demo AI Provider (Simulation)', configured: true },
+        { id: 'gemini', name: 'Google Gemini 1.5 Flash ✦ Recommended', configured: geminiConfigured },
         { id: 'openai', name: 'OpenAI (GPT-4o)', configured: openaiConfigured },
         { id: 'anthropic', name: 'Anthropic (Claude 3.5 Sonnet)', configured: anthropicConfigured },
-        { id: 'gemini', name: 'Google Gemini (1.5 Flash)', configured: geminiConfigured },
       ]
     };
   }
