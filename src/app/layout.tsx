@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AppProviders } from '@/components/AppProviders';
 
 export const metadata: Metadata = {
   title: 'DeployX - Autonomous Software Engineering Platform',
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'DeployX',
   },
   formatDetection: {
@@ -25,7 +26,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: 'cover',
-  themeColor: '#4f46e5',
+  themeColor: '#0d0d0d',
 };
 
 export default function RootLayout({
@@ -34,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -46,8 +47,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="h-full bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 overflow-x-hidden">
-        {children}
+      <body className="h-full bg-[#0d0d0d] text-slate-100 antialiased selection:bg-brand-600/30 selection:text-white overflow-x-hidden">
+        <AppProviders>
+          {children}
+        </AppProviders>
 
         {/* Service Worker Registration */}
         <script

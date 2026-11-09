@@ -31,8 +31,11 @@ import { VisualCustomizer } from '@/components/workspace/VisualCustomizer';
 import { VersionHistory } from '@/components/workspace/VersionHistory';
 import { DeploymentDrawer } from '@/components/workspace/DeploymentDrawer';
 import { IntegrationSettings } from '@/components/workspace/IntegrationSettings';
+import { useAuth } from '@/lib/auth-context';
+import { AuthPortal } from '@/components/auth/AuthPortal';
 
 export default function ProjectWorkspacePage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
@@ -64,8 +67,10 @@ export default function ProjectWorkspacePage() {
   };
 
   useEffect(() => {
-    loadProject();
-  }, [projectId]);
+    if (user) {
+      loadProject();
+    }
+  }, [projectId, user]);
 
   // Keyboard shortcuts listener for PC / Laptops
   useEffect(() => {
@@ -92,7 +97,6 @@ export default function ProjectWorkspacePage() {
       const data = await res.json();
       if (data.success && data.project) {
         setProject(data.project);
-        // On mobile, switch to preview automatically after generating so user sees the change!
         if (window.innerWidth < 1024) {
           setMobileTab('preview');
         }
@@ -201,7 +205,7 @@ export default function ProjectWorkspacePage() {
     const res = await fetch(`/api/projects/${project.id}/versions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, author: 'User' })
+      body: JSON.stringify({ message, author: user?.name || 'User' })
     });
     const data = await res.json();
     if (data.snapshot) {
@@ -228,39 +232,53 @@ export default function ProjectWorkspacePage() {
     }
   };
 
+  // If session is checking:
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center text-white">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
+  // If not logged in: show ChatGPT 3D Auth Portal
+  if (!user) {
+    return <AuthPortal />;
+  }
+
   if (isLoading || !project) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center text-white">
         <div className="flex flex-col items-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-          <span className="text-xs font-semibold text-slate-600">Mounting DeployX Workspace...</span>
+          <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+          <span className="text-xs font-semibold text-slate-400 font-mono">Mounting Workspace Environment...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-white overflow-hidden select-none">
-      {/* Workspace Master Header (Optimized for PC, Laptop, Tablet, and Mobile) */}
-      <header className="h-13 sm:h-14 px-3 sm:px-4 bg-white border-b border-slate-200 flex items-center justify-between flex-shrink-0 z-30">
+    <div className="h-[100dvh] flex flex-col bg-[#0d0d0d] text-slate-100 overflow-hidden select-none font-sans">
+      {/* Workspace Master Header (ChatGPT-Style Light-Black Dark Theme) */}
+      <header className="h-13 sm:h-14 px-3 sm:px-4 bg-[#171717] border-b border-white/10 flex items-center justify-between flex-shrink-0 z-30">
         <div className="flex items-center space-x-2 sm:space-x-3 truncate">
           <Link
             href="/"
-            className="p-1.5 rounded-lg text-slate-500 hover:text-navy-900 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
             title="Back to Dashboard"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
 
           <div className="flex items-center space-x-2 truncate">
-            <h1 className="font-bold text-xs sm:text-sm text-navy-900 truncate max-w-[140px] sm:max-w-xs md:max-w-md">
+            <h1 className="font-bold text-xs sm:text-sm text-white truncate max-w-[140px] sm:max-w-xs md:max-w-md">
               {project.name}
             </h1>
             <span
               className={`hidden xs:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
                 project.status === 'deployed'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-brand-100 text-brand-800'
+                  ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                  : 'bg-brand-500/10 text-brand-300 border border-brand-500/20'
               }`}
             >
               {project.status}
@@ -269,59 +287,59 @@ export default function ProjectWorkspacePage() {
         </div>
 
         {/* Center Tabs (Visible on Tablet Landscape, Laptops & Desktops) */}
-        <nav className="hidden lg:flex items-center space-x-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
+        <nav className="hidden lg:flex items-center space-x-1 bg-[#212121] border border-white/5 p-1 rounded-2xl text-xs font-semibold text-slate-400">
           <button
             onClick={() => setActiveTab('workspace')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'workspace' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'workspace' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <Eye className="w-3.5 h-3.5 text-brand-600" />
+            <Eye className="w-3.5 h-3.5 text-brand-400" />
             <span>Workspace</span>
           </button>
           <button
             onClick={() => setActiveTab('code')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'code' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'code' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <FileCode className="w-3.5 h-3.5 text-indigo-600" />
+            <FileCode className="w-3.5 h-3.5 text-indigo-400" />
             <span>Code & Files</span>
           </button>
           <button
             onClick={() => setActiveTab('visual')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'visual' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'visual' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <Palette className="w-3.5 h-3.5 text-violet-600" />
+            <Palette className="w-3.5 h-3.5 text-violet-400" />
             <span>Visual Studio</span>
           </button>
           <button
             onClick={() => setActiveTab('versions')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'versions' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'versions' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <History className="w-3.5 h-3.5 text-amber-600" />
+            <History className="w-3.5 h-3.5 text-amber-400" />
             <span>Versions ({project.versions?.length || 0})</span>
           </button>
           <button
             onClick={() => setActiveTab('deploy')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'deploy' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'deploy' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <Rocket className="w-3.5 h-3.5 text-emerald-600" />
+            <Rocket className="w-3.5 h-3.5 text-emerald-400" />
             <span>Deploy</span>
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'settings' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'
+            className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 ${
+              activeTab === 'settings' ? 'bg-[#2f2f2f] text-white shadow-sm font-bold' : 'hover:text-white'
             }`}
           >
-            <Settings className="w-3.5 h-3.5 text-slate-600" />
+            <Settings className="w-3.5 h-3.5 text-slate-400" />
             <span>Integrations</span>
           </button>
         </nav>
@@ -330,25 +348,25 @@ export default function ProjectWorkspacePage() {
         <div className="flex items-center space-x-1.5 sm:space-x-2">
           {/* Desktop Split-Screen Preset Toggles */}
           {activeTab === 'workspace' && (
-            <div className="hidden xl:flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-slate-500">
+            <div className="hidden xl:flex items-center space-x-1 bg-[#212121] border border-white/5 p-0.5 rounded-lg text-slate-400">
               <button
                 onClick={() => setDesktopSplit('fullChat')}
                 title="Full Chat View"
-                className={`p-1 rounded ${desktopSplit === 'fullChat' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'}`}
+                className={`p-1 rounded ${desktopSplit === 'fullChat' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'hover:text-white'}`}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setDesktopSplit('split')}
                 title="Split Side-by-Side (Default)"
-                className={`p-1 rounded ${desktopSplit === 'split' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'}`}
+                className={`p-1 rounded ${desktopSplit === 'split' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'hover:text-white'}`}
               >
                 <Columns2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setDesktopSplit('fullPreview')}
                 title="Full Preview View"
-                className={`p-1 rounded ${desktopSplit === 'fullPreview' ? 'bg-white text-navy-900 shadow-sm' : 'hover:text-navy-900'}`}
+                className={`p-1 rounded ${desktopSplit === 'fullPreview' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'hover:text-white'}`}
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -358,7 +376,7 @@ export default function ProjectWorkspacePage() {
           <a
             href={`/api/projects/${project.id}/export`}
             download
-            className="p-1.5 text-slate-600 hover:text-navy-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
             title="Download ZIP package"
           >
             <Download className="w-4 h-4" />
@@ -369,7 +387,7 @@ export default function ProjectWorkspacePage() {
               setActiveTab('deploy');
               setMobileTab('deploy');
             }}
-            className="px-3 sm:px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+            className="px-3 sm:px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-600/20 transition-all flex items-center gap-1.5"
           >
             <Rocket className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Deploy</span>
@@ -378,7 +396,7 @@ export default function ProjectWorkspacePage() {
       </header>
 
       {/* Main Workspace Surface */}
-      <main className="flex-grow overflow-hidden relative flex flex-col">
+      <main className="flex-grow overflow-hidden relative flex flex-col bg-[#0d0d0d]">
         {/* DESKTOP / LAPTOP / TABLET-LANDSCAPE VIEW (> 1024px) */}
         <div className="hidden lg:flex flex-grow h-full overflow-hidden">
           {activeTab === 'workspace' && (
@@ -386,7 +404,7 @@ export default function ProjectWorkspacePage() {
               {/* Left: Chat Builder */}
               {(desktopSplit === 'split' || desktopSplit === 'fullChat') && (
                 <div
-                  className={`h-full flex flex-col transition-all duration-200 ${
+                  className={`h-full flex flex-col transition-all duration-200 border-r border-white/10 ${
                     desktopSplit === 'fullChat' ? 'w-full' : 'w-[42%]'
                   }`}
                 >
@@ -534,12 +552,12 @@ export default function ProjectWorkspacePage() {
           )}
         </div>
 
-        {/* NATIVE MOBILE BOTTOM APP BAR (< 1024px) */}
-        <div className="lg:hidden h-14 bg-white border-t border-slate-200 flex items-center justify-around px-1 z-30 flex-shrink-0">
+        {/* NATIVE MOBILE BOTTOM APP BAR (ChatGPT Light-Black Dark Theme) */}
+        <div className="lg:hidden h-14 bg-[#171717] border-t border-white/10 flex items-center justify-around px-1 z-30 flex-shrink-0">
           <button
             onClick={() => setMobileTab('chat')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'chat' ? 'text-brand-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'chat' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <MessageSquare className="w-4 h-4 mb-0.5" />
@@ -549,7 +567,7 @@ export default function ProjectWorkspacePage() {
           <button
             onClick={() => setMobileTab('preview')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'preview' ? 'text-brand-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'preview' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Eye className="w-4 h-4 mb-0.5" />
@@ -559,7 +577,7 @@ export default function ProjectWorkspacePage() {
           <button
             onClick={() => setMobileTab('code')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'code' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'code' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <FileCode className="w-4 h-4 mb-0.5" />
@@ -569,7 +587,7 @@ export default function ProjectWorkspacePage() {
           <button
             onClick={() => setMobileTab('visual')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'visual' ? 'text-violet-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'visual' ? 'text-violet-400 font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Palette className="w-4 h-4 mb-0.5" />
@@ -579,7 +597,7 @@ export default function ProjectWorkspacePage() {
           <button
             onClick={() => setMobileTab('deploy')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'deploy' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'deploy' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Rocket className="w-4 h-4 mb-0.5" />
@@ -589,7 +607,7 @@ export default function ProjectWorkspacePage() {
           <button
             onClick={() => setMobileTab('settings')}
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              mobileTab === 'settings' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+              mobileTab === 'settings' ? 'text-white font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Settings className="w-4 h-4 mb-0.5" />
