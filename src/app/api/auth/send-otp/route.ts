@@ -17,11 +17,11 @@ export async function POST(req: Request) {
 
     const result = AuthStore.sendSignupOTP(email, name);
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (!result.success || !result.demoOtp) {
+      return NextResponse.json({ error: result.error || 'Failed to generate verification code' }, { status: 400 });
     }
 
-    // Dispatch real email via Resend, Brevo, SendGrid or Gmail SMTP
+    // Dispatch real email via Resend, Brevo, SendGrid
     const emailDispatch = await EmailService.sendVerificationOTP({
       toEmail: email.trim(),
       toName: name.trim(),
