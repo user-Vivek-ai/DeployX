@@ -196,35 +196,6 @@ export class EmailService {
       }
     }
 
-    // 4. Try Gmail / SMTP via Nodemailer if credentials exist
-    const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER || process.env.GMAIL_USER;
-    const emailPass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-
-    if (emailUser && emailPass) {
-      try {
-        // Dynamically import nodemailer to avoid build failures if not yet installed
-        const nodemailer = await import('nodemailer');
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: emailUser,
-            pass: emailPass
-          }
-        });
-
-        await transporter.sendMail({
-          from: `"DeployX Security" <${emailUser}>`,
-          to: toEmail,
-          subject,
-          html
-        });
-
-        return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
-      } catch (err: any) {
-        console.warn('Nodemailer SMTP dispatch failed:', err.message);
-      }
-    }
-
     // No external email provider is currently configured in environment variables
     return {
       success: false,
