@@ -17,6 +17,7 @@ export interface SendMailParams {
 /**
  * Pure Node.js zero-dependency TLS SMTP client for Gmail and standard SMTP servers.
  * Delivers transactional emails to ANY recipient without requiring custom domain DNS verification.
+ * Handles multiline SMTP responses (RFC 5321) and buffer chunking reliably.
  */
 export class SmtpClient {
   public static async sendMail(options: SmtpOptions, params: SendMailParams): Promise<boolean> {
@@ -25,73 +26,178 @@ export class SmtpClient {
     const { user, pass } = options;
     const { to, fromName = 'DeployX Security', subject, html } = params;
 
+    const cleanUser = user.trim();
+    const cleanPass = pass.replace(/\s+/g, ''); // Strip any spaces from Google App Password
+
     return new Promise((resolve) => {
-      const socket = tls.connect({ host, port, minVersion: 'TLSv1.2', timeout: 8000 }, () => {
-        let step = 0;
-
-        const send = (str: string) => {
-          socket.write(str + '\r\n');
-        };
-
-        socket.on('data', (data) => {
-          const response = data.toString();
-
-          if (step === 0 && response.startsWith('220')) {
-            step = 1;
-            send('EHLO deployx.local');
-          } else if (step === 1 && response.startsWith('250')) {
-            step = 2;
-            send('AUTH LOGIN');
-          } else if (step === 2 && response.startsWith('334')) {
-            step = 3;
-            send(Buffer.from(user).toString('base64'));
-          } else if (step === 3 && response.startsWith('334')) {
-            step = 4;
-            send(Buffer.from(pass.replace(/\s+/g, '')).toString('base64'));
-          } else if (step === 4 && response.startsWith('235')) {
-            step = 5;
-            send(`MAIL FROM:<${user}>`);
-          } else if (step === 5 && response.startsWith('250')) {
-            step = 6;
-            send(`RCPT TO:<${to}>`);
-          } else if (step === 6 && response.startsWith('250')) {
-            step = 7;
-            send('DATA');
-          } else if (step === 7 && response.startsWith('354')) {
-            step = 8;
-            const emailBody = [
-              `From: "${fromName}" <${user}>`,
-              `To: <${to}>`,
-              `Subject: ${subject}`,
-              'MIME-Version: 1.0',
-              'Content-Type: text/html; charset=UTF-8',
-              '',
-              html,
-              '.'
-            ].join('\r\n');
-            send(emailBody);
-          } else if (step === 8 && response.startsWith('250')) {
-            step = 9;
-            send('QUIT');
-            socket.end();
-            resolve(true);
-          } else if (response.startsWith('5') || response.startsWith('4')) {
-            console.warn(`SMTP error at step ${step}:`, response.trim());
+      let settled = false;
+      const finish = (result: boolean, reason?: string) => {
+        if (!settled) {
+          settled = true;
+          if (reason) console.log(`[SMTP Client] ${reason}`);
+          try {
             socket.destroy();
-            resolve(false);
+          } catch {}
+          resolve(result);
+        }
+      };
+
+      const socket = tls.connect(
+        {
+          host,
+          port,
+          minVersion: 'TLSv1.2',
+          rejectUnauthorized: true,
+          timeout: 10000
+        },
+        () => {
+          console.log(`[SMTP Client] TLS Connected to ${host}:${port}`);
+        }
+      );
+
+      let step = 0;
+      let buffer = '';
+
+      const send = (str: string) => {
+        socket.write(str + '\r\n');
+      };
+
+      socket.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+
+        // RFC 5321: A complete SMTP response ends with a line starting with 3 digits and a SPACE (or no more lines)
+        // Multiline responses have a hyphen: "250-..." whereas the final line has a space: "250 ..."
+        const lines = buffer.split('\r\n');
+        
+        // Find if the buffer contains a completed status line
+        let completedCode: number | null = null;
+        let completedMessage = '';
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const match = line.match(/^(\d{3})\s(.*)$/);
+          if (match) {
+            completedCode = parseInt(match[1], 10);
+            completedMessage = buffer;
+            // Clear processed lines from buffer
+            buffer = lines.slice(i + 1).join('\r\n');
+            break;
           }
-        });
+        }
+
+        if (completedCode === null) {
+          // Response still streaming (multiline like 250-), wait for next chunk
+          return;
+        }
+
+        const code = completedCode;
+
+        // Check for error responses (4xx or 5xx)
+        if (code >= 400) {
+          finish(false, `Server responded with error ${code}: ${completedMessage.trim()}`);
+          return;
+        }
+
+        // State Machine
+        switch (step) {
+          case 0:
+            // Expecting 220 Greeting from server
+            if (code === 220) {
+              step = 1;
+              send('EHLO deployx.local');
+            }
+            break;
+
+          case 1:
+            // Expecting 250 from EHLO
+            if (code === 250) {
+              step = 2;
+              send('AUTH LOGIN');
+            }
+            break;
+
+          case 2:
+            // Expecting 334 from AUTH LOGIN (Username challenge)
+            if (code === 334) {
+              step = 3;
+              send(Buffer.from(cleanUser).toString('base64'));
+            }
+            break;
+
+          case 3:
+            // Expecting 334 (Password challenge)
+            if (code === 334) {
+              step = 4;
+              send(Buffer.from(cleanPass).toString('base64'));
+            }
+            break;
+
+          case 4:
+            // Expecting 235 Authentication successful
+            if (code === 235) {
+              step = 5;
+              send(`MAIL FROM:<${cleanUser}>`);
+            }
+            break;
+
+          case 5:
+            // Expecting 250 Sender OK
+            if (code === 250) {
+              step = 6;
+              send(`RCPT TO:<${to.trim()}>`);
+            }
+            break;
+
+          case 6:
+            // Expecting 250 Recipient OK
+            if (code === 250) {
+              step = 7;
+              send('DATA');
+            }
+            break;
+
+          case 7:
+            // Expecting 354 Start mail input
+            if (code === 354) {
+              step = 8;
+              const emailPayload = [
+                `From: "${fromName}" <${cleanUser}>`,
+                `To: <${to.trim()}>`,
+                `Subject: ${subject}`,
+                'MIME-Version: 1.0',
+                'Content-Type: text/html; charset=UTF-8',
+                '',
+                html,
+                '.'
+              ].join('\r\n');
+              send(emailPayload);
+            }
+            break;
+
+          case 8:
+            // Expecting 250 OK: message queued/delivered
+            if (code === 250) {
+              step = 9;
+              send('QUIT');
+              finish(true, `Email delivered successfully to ${to}`);
+            }
+            break;
+
+          default:
+            break;
+        }
       });
 
       socket.on('error', (err) => {
-        console.warn('SMTP socket error:', err.message);
-        resolve(false);
+        finish(false, `Socket TLS Error: ${err.message}`);
       });
 
       socket.on('timeout', () => {
-        console.warn('SMTP connection timed out');
-        socket.destroy();
-        resolve(false);
+        finish(false, 'Socket connection timed out');
+      });
+
+      socket.on('close', () => {
+        finish(step >= 8, 'Socket closed');
       });
     });
   }
