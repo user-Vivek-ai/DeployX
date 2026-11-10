@@ -117,16 +117,19 @@ export class EmailService {
 
     if (smtpUser && smtpPass) {
       try {
-        const sent = await SmtpClient.sendMail(
+        const smtpResult = await SmtpClient.sendMail(
           { user: smtpUser, pass: smtpPass, host: smtpHost, port: smtpPort },
           { to: toEmail, fromName: 'DeployX Security', subject, html }
         );
-        if (sent) {
+        if (smtpResult.success) {
           return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
+        } else {
+          lastError = `Gmail SMTP error: ${smtpResult.error}`;
+          console.warn('Gmail SMTP failed:', smtpResult.error);
         }
       } catch (err: any) {
         lastError = `SMTP error: ${err.message}`;
-        console.warn('SMTP dispatch failed:', err.message);
+        console.warn('SMTP dispatch exception:', err.message);
       }
     }
 

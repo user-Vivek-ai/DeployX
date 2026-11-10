@@ -15,7 +15,11 @@ export async function GET() {
     !process.env.TWILIO_ACCOUNT_SID.includes('placeholder')
   );
 
-  const response: SystemHealthStatus = {
+  const smtpUser = process.env.EMAIL_USER || process.env.SMTP_USER;
+  const smtpPass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+  const resendKey = process.env.RESEND_API_KEY;
+
+  const response = {
     status: 'healthy',
     ai: {
       activeProvider: aiStatus.providerName,
@@ -30,7 +34,14 @@ export async function GET() {
       stripeConfigured,
       otpProvider: process.env.OTP_PROVIDER || 'demo',
       otpConfigured,
-      deploymentProvider: process.env.DEPLOYMENT_PROVIDER || 'local'
+      deploymentProvider: process.env.DEPLOYMENT_PROVIDER || 'local',
+      email: {
+        smtpUserConfigured: Boolean(smtpUser),
+        smtpUser: smtpUser ? `${smtpUser.slice(0, 3)}***@${smtpUser.split('@')[1] || 'domain'}` : null,
+        smtpPassConfigured: Boolean(smtpPass),
+        resendConfigured: Boolean(resendKey && !resendKey.includes('placeholder')),
+        activeEngine: (smtpUser && smtpPass) ? 'Gmail SMTP' : (resendKey ? 'Resend' : 'None')
+      }
     },
     serverTime: new Date().toISOString()
   };

@@ -116,7 +116,11 @@ export function AuthPortal() {
 
       setDemoOtpHint(data.fallbackOtp || null);
       setTimerSeconds(data.expiresInSeconds || 300);
-      setSuccessMsg(`✓ 6-Digit code dispatched to ${email}. Check your inbox.`);
+      if (data.emailSent) {
+        setSuccessMsg(`✓ 6-Digit code dispatched to ${email}. Check your inbox and spam folder.`);
+      } else {
+        setErrorMsg(data.dispatchError ? `Delivery Notice: ${data.dispatchError}` : 'Could not deliver email to this address.');
+      }
       setSignupStep(2);
     } catch {
       setErrorMsg('Network error. Please try again.');

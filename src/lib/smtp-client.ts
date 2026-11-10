@@ -14,13 +14,18 @@ export interface SendMailParams {
   html: string;
 }
 
+export interface SmtpResult {
+  success: boolean;
+  error?: string;
+}
+
 /**
  * Pure Node.js zero-dependency TLS SMTP client for Gmail and standard SMTP servers.
  * Delivers transactional emails to ANY recipient without requiring custom domain DNS verification.
  * Handles multiline SMTP responses (RFC 5321) and buffer chunking reliably.
  */
 export class SmtpClient {
-  public static async sendMail(options: SmtpOptions, params: SendMailParams): Promise<boolean> {
+  public static async sendMail(options: SmtpOptions, params: SendMailParams): Promise<SmtpResult> {
     const host = options.host || 'smtp.gmail.com';
     const port = options.port || 465;
     const { user, pass } = options;
@@ -38,7 +43,7 @@ export class SmtpClient {
           try {
             socket.destroy();
           } catch {}
-          resolve(result);
+          resolve({ success: result, error: result ? undefined : (reason || 'Unknown SMTP error') });
         }
       };
 
