@@ -13,9 +13,9 @@ import {
   EyeOff,
   ShieldCheck,
   Check,
-  QrCode,
   Smartphone,
-  Copy
+  Copy,
+  QrCode
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -25,9 +25,6 @@ export function AuthPortal() {
   // Mode: 'signup' vs 'login'
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
 
-  // Multi-step signup: 1 = Details & Password, 2 = Microsoft Authenticator QR Scan
-  const [signupStep, setSignupStep] = useState<1 | 2>(1);
-
   // Form Fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -36,9 +33,8 @@ export function AuthPortal() {
   const [showPassword, setShowPassword] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
-  // TOTP Authenticator Data
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [secretKey, setSecretKey] = useState<string | null>(null);
+  // Fixed Base32 Secret Key for the current signup session
+  const [secretKey, setSecretKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
 
   // Status & UI States
@@ -50,6 +46,16 @@ export function AuthPortal() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Initialize a secure Base32 secret on mount
+  useEffect(() => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let s = '';
+    for (let i = 0; i < 20; i++) {
+      s += chars[Math.floor(Math.random() * chars.length)];
+    }
+    setSecretKey(s);
+  }, []);
 
   // Track 3D cursor movement across the viewport
   useEffect(() => {
@@ -71,6 +77,15 @@ export function AuthPortal() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
+  // Compute live QR Code URL for Microsoft Authenticator
+  const cleanEmail = email.trim() || 'user@deployx.dev';
+  const otpAuthUrl = secretKey
+    ? `otpauth://totp/DeployX:${encodeURIComponent(cleanEmail)}?secret=${secretKey}&issuer=DeployX&algorithm=SHA1&digits=6&period=30`
+    : '';
+  const qrCodeUrl = otpAuthUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(otpAuthUrl)}`
+    : '';
+
   // Real-time password requirement checkers
   const hasMinLength = password.length >= 8;
   const hasUpper = /[A-Z]/.test(password);
@@ -79,14 +94,14 @@ export function AuthPortal() {
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const isPasswordValid = hasMinLength && hasUpper && hasLower && hasNumber && passwordsMatch;
 
-  // Step 1: Submit Details & Generate Microsoft Authenticator QR Code
-  const handleInitiateTotp = async (e: React.FormEvent) => {
+  // Single-Step Complete Signup via Microsoft Authenticator Verification
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
     if (!name.trim() || !email.trim() || !password || !confirmPassword) {
-      setErrorMsg('Please fill in your name, email, password, and confirmation.');
+      setErrorMsg('Please fill in Name, Email, Password, and Confirm Password.');
       return;
     }
 
@@ -95,55 +110,22 @@ export function AuthPortal() {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/totp/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          password
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'Failed to initiate authenticator setup.');
-        return;
-      }
-
-      setQrCodeUrl(data.qrCodeUrl);
-      setSecretKey(data.secret);
-      setSignupStep(2);
-      setSuccessMsg('Scan the QR code below using Microsoft Authenticator.');
-    } catch {
-      setErrorMsg('Network error. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Step 2: Verify TOTP Code from Microsoft Authenticator & Complete Registration
-  const handleVerifyTotp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
     const cleanCode = otpCode.trim().replace(/\D/g, '');
     if (cleanCode.length !== 6) {
-      setErrorMsg('Please enter the 6-digit code shown in Microsoft Authenticator.');
+      setErrorMsg('Please scan the QR code and enter the 6-digit code from Microsoft Authenticator.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/totp/verify', {
+      const res = await fetch('/api/auth/totp/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: name.trim(),
           email: email.trim(),
+          password,
+          secret: secretKey,
           code: cleanCode
         })
       });
@@ -151,12 +133,11 @@ export function AuthPortal() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'Invalid 6-digit code. Please enter the current code from your authenticator app.');
+        setErrorMsg(data.error || 'Failed to complete registration.');
         return;
       }
 
-      // Success! Set user and log into the application
-      setSuccessMsg('✓ Authenticator verified! Account registered successfully.');
+      setSuccessMsg('✓ Account verified and registered successfully! Logging you in...');
       if (data.user) {
         setUser(data.user);
       }
@@ -205,7 +186,7 @@ export function AuthPortal() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-[#0d0d0d] text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none font-sans">
+    <div className="relative min-h-screen w-full bg-[#0d0d0d] text-slate-100 flex items-center justify-center p-3 sm:p-6 overflow-x-hidden select-none font-sans">
       {/* Interactive 3D Cursor Lighting Canvas & Radial Glow */}
       <div
         className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
@@ -244,15 +225,15 @@ export function AuthPortal() {
           transform: `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           transformStyle: 'preserve-3d'
         }}
-        className="relative z-10 w-full max-w-md bg-[#171717] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 backdrop-blur-xl transition-transform duration-200 ease-out"
+        className="relative z-10 w-full max-w-lg bg-[#171717] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl shadow-black/80 backdrop-blur-xl transition-transform duration-200 ease-out my-4"
       >
         {/* Shimmer Border Overlay */}
         <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent pointer-events-none -z-10" />
 
         <div style={{ transform: 'translateZ(30px)' }}>
           {/* Logo & Header */}
-          <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/25 mb-3 border border-white/10">
+          <div className="flex flex-col items-center text-center mb-5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/25 mb-2.5 border border-white/10">
               <span className="text-xl font-black text-white tracking-tighter">Dx</span>
             </div>
             <div className="flex items-center space-x-2">
@@ -267,14 +248,13 @@ export function AuthPortal() {
           </div>
 
           {/* Toggle Tab: Sign Up vs Log In */}
-          <div className="grid grid-cols-2 p-1 bg-[#212121] rounded-2xl border border-white/5 mb-5 text-xs font-semibold">
+          <div className="grid grid-cols-2 p-1 bg-[#212121] rounded-2xl border border-white/5 mb-4 text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
                 setMode('signup');
                 setErrorMsg(null);
                 setSuccessMsg(null);
-                setSignupStep(1);
               }}
               className={`py-2 rounded-xl transition-all ${
                 mode === 'signup'
@@ -317,228 +297,198 @@ export function AuthPortal() {
           )}
 
           {/* ============================================================== */}
-          {/* SIGNUP FLOW (MICROSOFT AUTHENTICATOR QR FLOW)                  */}
+          {/* SIGNUP FLOW (QR CODE VISIBLE RIGHT ON SIGNUP AS REQUESTED)     */}
           {/* ============================================================== */}
           {mode === 'signup' && (
-            <div>
-              {/* Step Progress Tracker */}
-              <div className="flex items-center justify-between mb-5 px-1">
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 1 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>1</span>
-                  <span className={signupStep === 1 ? 'text-white' : ''}>Account Details</span>
+            <form onSubmit={handleSignupSubmit} className="space-y-3.5">
+              {/* Account Details: Name & Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Vivek Akula"
+                      required
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                    />
+                  </div>
                 </div>
-                <div className="w-12 h-[1px] bg-white/10" />
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 2 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>2</span>
-                  <span className={signupStep === 2 ? 'text-white' : ''}>Authenticator Scan</span>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      required
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* STAGE 1: Name, Email, Password, Confirm Password */}
-              {signupStep === 1 && (
-                <form onSubmit={handleInitiateTotp} className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Full Name
-                    </label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Vivek Akula"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@example.com"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Enter Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Create a strong password"
-                        required
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Password Checklist Meters */}
-                  {password.length > 0 && (
-                    <div className="p-3 bg-[#212121] rounded-xl border border-white/5 space-y-1 text-[11px]">
-                      <div className="text-slate-400 font-semibold mb-1">Password Requirements:</div>
-                      <div className="grid grid-cols-2 gap-1 text-[10px]">
-                        <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasMinLength ? '✓' : '•'} 8+ characters</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasUpper ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasUpper ? '✓' : '•'} 1 uppercase (A-Z)</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasLower ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasLower ? '✓' : '•'} 1 lowercase (a-z)</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasNumber ? '✓' : '•'} 1 number (0-9)</span>
-                        </span>
-                      </div>
-                      {confirmPassword.length > 0 && (
-                        <div className={`pt-1 text-[10px] font-semibold ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !name.trim() || !email.trim() || !isPasswordValid}
-                    className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
-                  >
-                    <span>{isLoading ? 'Generating QR Code...' : 'Continue to Authenticator Setup'}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              )}
-
-              {/* STAGE 2: Scan QR with Microsoft Authenticator and enter 6-digit Code */}
-              {signupStep === 2 && (
-                <form onSubmit={handleVerifyTotp} className="space-y-4">
-                  {/* Authenticator App Guide Card */}
-                  <div className="p-3.5 bg-brand-600/10 border border-brand-500/20 rounded-2xl space-y-1 text-xs">
-                    <div className="flex items-center space-x-2 text-brand-300 font-semibold">
-                      <Smartphone className="w-4 h-4 text-brand-400" />
-                      <span>Microsoft Authenticator Verification</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      1. Open <strong>Microsoft Authenticator</strong> (or Google Authenticator) on your phone.
-                      <br />
-                      2. Tap <strong>+</strong> &rarr; <strong>Other account</strong> &rarr; Scan this QR Code.
-                    </p>
-                  </div>
-
-                  {/* QR Code Canvas / Image */}
-                  {qrCodeUrl && (
-                    <div className="flex flex-col items-center justify-center p-3 bg-white/5 rounded-2xl border border-white/10">
-                      <div className="p-2.5 bg-white rounded-2xl shadow-xl shadow-black/50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={qrCodeUrl}
-                          alt="Microsoft Authenticator QR Code"
-                          className="w-44 h-44 rounded-xl"
-                        />
-                      </div>
-                      <div className="mt-2 text-[10px] text-slate-400 text-center">
-                        Scan from mobile camera inside Authenticator app
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Manual Secret Key Copy Fallback */}
-                  {secretKey && (
-                    <div className="p-2.5 bg-[#212121] rounded-xl border border-white/5 flex items-center justify-between text-xs">
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] text-slate-400 block">Can&apos;t scan? Enter key manually:</span>
-                        <code className="text-brand-300 font-mono font-bold tracking-wider text-[11px]">
-                          {secretKey}
-                        </code>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={copySecretToClipboard}
-                        className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center space-x-1 border border-white/10 transition-colors"
-                      >
-                        {copiedKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedKey ? 'Copied' : 'Copy'}</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 6-Digit Authenticator Code Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Enter 6-Digit Code from Authenticator App
-                    </label>
+              {/* Passwords: Enter & Confirm */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Enter Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                     <input
-                      type="text"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="• • • • • •"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="8+ chars with A-Z, 0-9"
                       required
-                      autoFocus
-                      className="w-full py-3 text-center font-mono text-2xl tracking-[0.5em] rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 outline-none"
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
                     />
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={() => setSignupStep(1)}
-                      className="w-1/3 py-2.5 bg-[#212121] hover:bg-[#2a2a2a] text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300"
                     >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isLoading || otpCode.length !== 6}
-                      className="w-2/3 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
-                    >
-                      <span>{isLoading ? 'Verifying...' : 'Verify & Register'}</span>
-                      <Check className="w-3.5 h-3.5" />
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                </form>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      required
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Password Requirements Checklist */}
+              {password.length > 0 && (
+                <div className="p-2.5 bg-[#212121] rounded-xl border border-white/5 text-[10px]">
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span>{hasMinLength ? '✓' : '•'} 8+ characters</span>
+                    </span>
+                    <span className={`flex items-center space-x-1 ${hasUpper ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span>{hasUpper ? '✓' : '•'} 1 uppercase (A-Z)</span>
+                    </span>
+                    <span className={`flex items-center space-x-1 ${hasLower ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span>{hasLower ? '✓' : '•'} 1 lowercase (a-z)</span>
+                    </span>
+                    <span className={`flex items-center space-x-1 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span>{hasNumber ? '✓' : '•'} 1 number (0-9)</span>
+                    </span>
+                  </div>
+                  {confirmPassword.length > 0 && (
+                    <div className={`pt-1 font-semibold ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
+
+              {/* ============================================================ */}
+              {/* MICROSOFT AUTHENTICATOR QR CODE (VISIBLE RIGHT ON THE CARD!) */}
+              {/* ============================================================ */}
+              <div className="p-3.5 bg-[#1f1f23] rounded-2xl border border-brand-500/30 space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-1.5 text-brand-300 font-semibold">
+                    <Smartphone className="w-4 h-4 text-brand-400" />
+                    <span>Scan with Microsoft Authenticator</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-medium border border-brand-500/30">
+                    Live QR
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Open <strong>Microsoft Authenticator</strong> on your phone &rarr; tap <strong>+</strong> &rarr; <strong>Other account</strong> &rarr; scan this QR code:
+                </p>
+
+                {/* QR Code Container */}
+                {qrCodeUrl ? (
+                  <div className="flex flex-col items-center justify-center pt-1 pb-1">
+                    <div className="p-2 bg-white rounded-2xl shadow-xl shadow-black/60 border border-white/20 inline-block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrCodeUrl}
+                        alt="Microsoft Authenticator QR Code"
+                        className="w-40 h-40 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-40 h-40 mx-auto bg-black/40 rounded-xl flex items-center justify-center text-xs text-slate-500">
+                    Generating QR...
+                  </div>
+                )}
+
+                {/* Manual Key Fallback */}
+                {secretKey && (
+                  <div className="p-2 bg-[#171719] rounded-xl border border-white/5 flex items-center justify-between text-[11px]">
+                    <div className="space-y-0.5 truncate mr-2">
+                      <span className="text-[10px] text-slate-400 block">Can&apos;t scan? Manual Key:</span>
+                      <code className="text-brand-300 font-mono font-bold tracking-wider text-[11px]">
+                        {secretKey}
+                      </code>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={copySecretToClipboard}
+                      className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center space-x-1 border border-white/10 transition-colors flex-shrink-0"
+                    >
+                      {copiedKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 6-Digit Code Input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Enter 6-Digit Code from Microsoft Authenticator
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="• • • • • •"
+                  required
+                  className="w-full py-2.5 text-center font-mono text-2xl tracking-[0.5em] rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || !name.trim() || !email.trim() || !isPasswordValid || otpCode.length !== 6}
+                className="w-full mt-1 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+              >
+                <span>{isLoading ? 'Verifying & Registering...' : 'Verify Code & Complete Sign Up'}</span>
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </form>
           )}
 
           {/* ============================================================== */}
@@ -625,7 +575,6 @@ export function AuthPortal() {
                       setMode('signup');
                       setErrorMsg(null);
                       setSuccessMsg(null);
-                      setSignupStep(1);
                     }}
                     className="text-brand-400 hover:text-brand-300 font-semibold"
                   >

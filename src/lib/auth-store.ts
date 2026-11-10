@@ -275,6 +275,57 @@ export class AuthStore {
   }
 
   /**
+   * Direct registration after TOTP verification
+   */
+  public static registerDirectUser(params: { name: string; email: string; password: string }): {
+    success: boolean;
+    token?: string;
+    user?: { id: string; name: string; email: string };
+    error?: string;
+  } {
+    this.init();
+    const { name, email, password } = params;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    if (this.users.has(cleanEmail)) {
+      return { success: false, error: 'An account with this email already exists. Please log in.' };
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(password, salt);
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    const newUser: UserAccount = {
+      id: userId,
+      name: cleanName,
+      email: cleanEmail,
+      salt,
+      passwordHash,
+      createdAt: new Date().toISOString()
+    };
+
+    this.users.set(cleanEmail, newUser);
+    this.saveToDisk();
+
+    const token = crypto.randomBytes(32).toString('hex');
+    this.sessions.set(token, {
+      userId: newUser.id,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    });
+
+    return {
+      success: true,
+      token,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email
+      }
+    };
+  }
+
+  /**
    * Microsoft Authenticator TOTP: Stage 1 Setup
    * Receives Name, Email, Password, generates a secret key & QR code URL.
    */
