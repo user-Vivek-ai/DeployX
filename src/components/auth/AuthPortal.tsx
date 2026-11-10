@@ -114,9 +114,9 @@ export function AuthPortal() {
         return;
       }
 
-      setDemoOtpHint(data.demoOtp || null);
+      setDemoOtpHint(data.fallbackOtp || null);
       setTimerSeconds(data.expiresInSeconds || 300);
-      setSuccessMsg(`✓ 6-Digit OTP code dispatched to ${email}. Check your inbox.`);
+      setSuccessMsg(`✓ 6-Digit code dispatched to ${email}. Check your inbox.`);
       setSignupStep(2);
     } catch {
       setErrorMsg('Network error. Please try again.');
@@ -421,21 +421,17 @@ export function AuthPortal() {
                     <div className="font-semibold text-white mt-0.5">{email}</div>
                   </div>
 
-                  {demoOtpHint && (
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl text-xs flex items-center justify-between">
-                      <div>
-                        <span className="text-amber-400 font-semibold block text-[11px]">Demo Mode OTP:</span>
-                        <span className="font-mono text-base font-bold tracking-widest">{demoOtpHint}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setOtpCode(demoOtpHint)}
-                        className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg text-[11px] font-semibold transition-colors"
-                      >
-                        Auto-Fill
-                      </button>
+                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex items-start space-x-3 text-xs">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Mail className="w-3.5 h-3.5" />
                     </div>
-                  )}
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-emerald-300">Verification Code Dispatched</p>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        We sent a 6-digit confirmation code to <strong className="text-white">{email}</strong>. Please check your inbox and spam folder.
+                      </p>
+                    </div>
+                  </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -482,6 +478,21 @@ export function AuthPortal() {
                       <Check className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {demoOtpHint && (
+                    <div className="text-center pt-1">
+                      <p className="text-[10px] text-slate-500">
+                        Mail key not set on Vercel?{' '}
+                        <button
+                          type="button"
+                          onClick={() => setOtpCode(demoOtpHint)}
+                          className="text-brand-400 hover:text-brand-300 underline"
+                        >
+                          Fill dev code ({demoOtpHint})
+                        </button>
+                      </p>
+                    </div>
+                  )}
                 </form>
               )}
 
