@@ -1,4 +1,4 @@
-export type AIProviderType = 'auto' | 'mock' | 'openai' | 'anthropic' | 'gemini';
+export type AIProviderType = 'auto' | 'mock' | 'openai' | 'anthropic' | 'gemini' | 'chatgpt';
 
 export interface ProjectFile {
   path: string;

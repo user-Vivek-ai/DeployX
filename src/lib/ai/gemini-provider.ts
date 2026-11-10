@@ -46,6 +46,38 @@ export class GeminiProvider {
     return [];
   }
 
+  public async chat(message: string): Promise<string> {
+    const systemPrompt = `You are DeployX, a world-class AI assistant combining ChatGPT and Claude conversational capabilities.
+You can converse naturally about anything: tell jokes, solve math, write code in Python/JavaScript/C++, answer trivia, explain science, brainstorm ideas, or just chat casually for fun and "time pass".
+Respond in a warm, witty, engaging, and helpful human tone with clean markdown formatting.
+
+User message: "${message}"`;
+
+    try {
+      const response = await this.callGemini(systemPrompt);
+      return response.trim();
+    } catch {
+      return this.fallbackChat(message);
+    }
+  }
+
+  private fallbackChat(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+      return `Hello! 👋 Great to talk with you. I'm DeployX. Whether you want to chat casually for some time pass, ask questions, write code, or build a complete website whenever you're ready — I'm right here! What's on your mind?`;
+    }
+    if (lower.includes('joke')) {
+      return `Here's a good one for you! 😄\n\nWhy do programmers always prefer dark mode?\n\n*Because light attracts bugs!* 🐛\n\nWant another joke or a riddle?`;
+    }
+    if (lower.includes('who are you') || lower.includes('what are you')) {
+      return `I'm DeployX, an intelligent AI assistant combining ChatGPT-style conversational intelligence with autonomous software engineering powers. We can chat about anything, or I can generate and deploy full web applications on command!`;
+    }
+    if (lower.includes('bored') || lower.includes('time pass')) {
+      return `Let's beat that boredom! 🚀 Here are a few fun things we could do right now:\n1. 🧠 Play a rapid-fire trivia quiz\n2. 📜 Write a funny story or poem together\n3. 💡 Brainstorm cool tech or startup ideas\n4. 💻 Learn a fun programming trick or build a mini-game\n\nWhat sounds good to you?`;
+    }
+    return `That's an interesting thought! As an AI assistant, I love discussing new topics, solving problems, or just chatting for fun. Tell me more about what you're thinking!`;
+  }
+
   private cleanHTML(raw: string): string | null {
     let text = raw.trim();
     // Strip markdown code blocks if Gemini added them (e.g. ```html ... ```)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { AIProviderFactory } from '@/lib/ai/adapter';
 import { CodeSecurityValidator } from '@/lib/ai/validator';
+import { isWebsiteIntent } from '@/lib/ai/intent';
 import { ProjectStore } from '@/lib/store';
 import { ProjectFile, ChatMessage } from '@/lib/types';
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     let project = ProjectStore.getProject(projectId);
     if (!project) {
       project = ProjectStore.createProject({
-        name: prompt.slice(0, 36) || 'Project',
+        name: prompt.slice(0, 36) || 'Chat Session',
         description: prompt,
         initialPrompt: prompt
       });
@@ -28,12 +29,42 @@ export async function POST(req: Request) {
       project.files = currentFiles;
     }
 
-    const provider = AIProviderFactory.getProvider('auto');
+    const provider = AIProviderFactory.getProvider(project.aiProvider || 'auto');
+    const hasFiles = project.files.some(f => f.path === 'index.html' || f.path.endsWith('.html'));
+    const isWeb = isWebsiteIntent(prompt, hasFiles);
 
-    // If project has no files yet, generate initial code instead of refining empty files!
-    const hasHtml = project.files.some(f => f.path === 'index.html' || f.path.endsWith('.html'));
+    // If intent is purely conversational / ChatGPT time pass
+    if (!isWeb) {
+      const reply = await provider.chat(prompt);
+
+      const userMsg: ChatMessage = {
+        id: `msg_${Date.now()}_u`,
+        role: 'user',
+        content: prompt,
+        timestamp: new Date().toISOString()
+      };
+
+      const assistantMsg: ChatMessage = {
+        id: `msg_${Date.now()}_a`,
+        role: 'assistant',
+        content: reply,
+        providerUsed: provider.name,
+        timestamp: new Date().toISOString()
+      };
+
+      project.messages.push(userMsg, assistantMsg);
+      ProjectStore.saveProject(project);
+
+      return NextResponse.json({
+        success: true,
+        project,
+        isChat: true
+      });
+    }
+
+    // Website generation or modification
     let result;
-    if (!hasHtml || project.files.length === 0) {
+    if (!hasFiles || project.files.length === 0) {
       result = await provider.generate({
         projectId,
         prompt,

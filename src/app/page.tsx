@@ -57,6 +57,8 @@ export default function ClaudeAppPage() {
   const [homePrompt, setHomePrompt] = useState('');
   const [chatPrompt, setChatPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<'chatgpt' | 'gemini'>('chatgpt');
+  const [showModelMenu, setShowModelMenu] = useState(false);
 
   // Artifact Viewer State
   const [artifactTab, setArtifactTab] = useState<'preview' | 'code'>('preview');
@@ -136,7 +138,8 @@ export default function ClaudeAppPage() {
           name: projectName,
           description: text,
           initialPrompt: text,
-          tags: ['Web App', 'Gemini AI']
+          tags: selectedModel === 'chatgpt' ? ['ChatGPT', 'Time Pass'] : ['Web App', 'Gemini AI'],
+          aiProvider: selectedModel
         })
       });
 
@@ -471,6 +474,13 @@ export default function ClaudeAppPage() {
               <div className="flex items-center space-x-2 text-xs">
                 <span className="text-slate-400">DeployX /</span>
                 <span className="font-bold text-white truncate max-w-xs">{currentProject.name}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || currentProject.files.length === 0
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : 'bg-brand-500/15 text-brand-300 border-brand-500/30'
+                }`}>
+                  {currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || currentProject.files.length === 0 ? '🟢 ChatGPT' : '✨ Gemini 1.5'}
+                </span>
               </div>
             )}
           </div>
@@ -481,7 +491,7 @@ export default function ClaudeAppPage() {
               Free plan · <span className="text-white hover:underline cursor-pointer">Upgrade</span>
             </span>
 
-            {currentProject && (
+            {currentProject && currentProject.files.length > 0 && (
               <button
                 onClick={handleDeploy}
                 disabled={isDeploying}
@@ -555,9 +565,59 @@ export default function ClaudeAppPage() {
                       <Mic className="w-4 h-4" />
                     </button>
 
-                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                      Gemini 1.5 Flash · Fast
-                    </span>
+                    {/* Interactive Model Selector Pill */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowModelMenu(!showModelMenu)}
+                        className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors"
+                      >
+                        <span className={`w-2 h-2 rounded-full ${selectedModel === 'chatgpt' ? 'bg-emerald-400' : 'bg-brand-400'} animate-pulse`}></span>
+                        <span>{selectedModel === 'chatgpt' ? 'ChatGPT (GPT-4o)' : 'Gemini 1.5 Flash'}</span>
+                        <ChevronDown className="w-3 h-3 text-slate-400" />
+                      </button>
+
+                      {showModelMenu && (
+                        <div className="absolute bottom-10 right-0 w-64 bg-[#242424] border border-white/15 rounded-2xl shadow-2xl p-1.5 space-y-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Select AI Engine
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedModel('chatgpt'); setShowModelMenu(false); }}
+                            className={`w-full p-2.5 rounded-xl text-left transition-colors flex items-start gap-2.5 ${
+                              selectedModel === 'chatgpt' ? 'bg-emerald-500/15 border border-emerald-500/30' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></span>
+                            <div>
+                              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <span>ChatGPT (GPT-4o)</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">Time Pass</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400">Casual chatting, jokes, trivia, questions & time pass companion.</p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedModel('gemini'); setShowModelMenu(false); }}
+                            className={`w-full p-2.5 rounded-xl text-left transition-colors flex items-start gap-2.5 ${
+                              selectedModel === 'gemini' ? 'bg-brand-500/15 border border-brand-500/30' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-brand-400 mt-1.5 flex-shrink-0"></span>
+                            <div>
+                              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <span>Google Gemini 1.5 Flash</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-brand-500/20 text-brand-300 font-semibold">Builder</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400">Autonomous website synthesis, HTML generation & coding.</p>
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       onClick={() => handleStartNewProject()}
@@ -577,8 +637,11 @@ export default function ClaudeAppPage() {
               {/* Quick Starter Chips */}
               <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                 {[
+                  { label: '😄 Tell a joke', prompt: 'Tell me a funny programmer joke!' },
+                  { label: '🧠 Trivia & Riddles', prompt: 'Ask me a clever riddle and let me guess the answer.' },
+                  { label: '☕ Casual Chat', prompt: 'I want to chat for some time pass! What are some fun things we can talk about?' },
+                  { label: '💡 Startup Ideas', prompt: 'Give me 3 high-potential and viral tech startup ideas.' },
                   { label: '🏋️ Fitness Gym Website', prompt: 'Build a modern fitness gym website with membership plans, trainer profiles, workout schedule, and a join now form.' },
-                  { label: '📸 Photography Portfolio', prompt: 'Build an artistic dark-themed portfolio for a photographer featuring a gallery grid, client testimonials, and booking inquiry.' },
                   { label: '🍽️ Artisan Restaurant', prompt: 'Build an upscale farm-to-table restaurant website with online table reservations and signature tasting menu.' },
                   { label: '🚀 SaaS Cloud Landing', prompt: 'Build a high-converting tech SaaS landing page with animated feature cards, interactive pricing tiers, and FAQ accordion.' }
                 ].map((chip) => (
@@ -635,8 +698,8 @@ export default function ClaudeAppPage() {
                           {msg.content}
                         </p>
 
-                        {/* Claude Artifact Box */}
-                        {!isUser && (
+                        {/* Claude Artifact Box - only show when this message produced or modified files */}
+                        {!isUser && currentProject.files && currentProject.files.length > 0 && (msg.fileChanges && msg.fileChanges.length > 0 || currentProject.messages[1]?.id === msg.id) && (
                           <div
                             onClick={() => setArtifactTab('preview')}
                             className="p-3 rounded-xl bg-[#1a1a1a] border border-white/10 flex items-center justify-between cursor-pointer hover:border-brand-500/40 transition-all group"
@@ -723,110 +786,177 @@ export default function ClaudeAppPage() {
             </div>
 
             {/* --------------------------------------------------------------------- */}
-            {/* RIGHT PANE: CLAUDE ARTIFACT PANEL */}
+            {/* RIGHT PANE: CLAUDE ARTIFACT PANEL / CHATGPT COMPANION */}
             {/* --------------------------------------------------------------------- */}
             <div className="hidden lg:flex w-[55%] h-full flex-col bg-[#141414] overflow-hidden">
-              {/* Artifact Toolbar */}
-              <div className="h-12 px-4 bg-[#1a1a1a] border-b border-white/5 flex items-center justify-between flex-shrink-0">
-                {/* Left: Artifact File Label & Preview / Code Tabs */}
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-1.5 text-xs font-semibold text-white">
-                    <FileCode className="w-4 h-4 text-brand-400" />
-                    <span>index.html</span>
+              {currentProject.files.length > 0 ? (
+                <>
+                  {/* Artifact Toolbar */}
+                  <div className="h-12 px-4 bg-[#1a1a1a] border-b border-white/5 flex items-center justify-between flex-shrink-0">
+                    {/* Left: Artifact File Label & Preview / Code Tabs */}
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-1.5 text-xs font-semibold text-white">
+                        <FileCode className="w-4 h-4 text-brand-400" />
+                        <span>index.html</span>
+                      </div>
+
+                      <div className="flex items-center bg-[#242424] p-0.5 rounded-xl border border-white/5 text-xs font-medium">
+                        <button
+                          onClick={() => setArtifactTab('preview')}
+                          className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
+                            artifactTab === 'preview' ? 'bg-[#333333] text-white font-bold' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview</span>
+                        </button>
+                        <button
+                          onClick={() => setArtifactTab('code')}
+                          className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
+                            artifactTab === 'code' ? 'bg-[#333333] text-white font-bold' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Code2 className="w-3.5 h-3.5" />
+                          <span>Code</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Right: Viewport Controls & Actions */}
+                    <div className="flex items-center space-x-2">
+                      {/* Viewport switcher */}
+                      <div className="flex items-center bg-[#242424] p-0.5 rounded-lg border border-white/5">
+                        <button
+                          onClick={() => setViewport('desktop')}
+                          className={`p-1 rounded text-slate-400 hover:text-white ${viewport === 'desktop' ? 'bg-white/10 text-white' : ''}`}
+                          title="Desktop view"
+                        >
+                          <Monitor className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setViewport('mobile')}
+                          className={`p-1 rounded text-slate-400 hover:text-white ${viewport === 'mobile' ? 'bg-white/10 text-white' : ''}`}
+                          title="Mobile view"
+                        >
+                          <Smartphone className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => setPreviewKey(k => k + 1)}
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                        title="Refresh Preview"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={handleCopyCode}
+                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        title="Copy code"
+                      >
+                        {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Code2 className="w-3 h-3" />}
+                        <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                      </button>
+
+                      <a
+                        href={`/api/projects/${currentProject.id}/export`}
+                        download
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                        title="Download HTML package"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   </div>
 
-                  <div className="flex items-center bg-[#242424] p-0.5 rounded-xl border border-white/5 text-xs font-medium">
-                    <button
-                      onClick={() => setArtifactTab('preview')}
-                      className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
-                        artifactTab === 'preview' ? 'bg-[#333333] text-white font-bold' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Preview</span>
-                    </button>
-                    <button
-                      onClick={() => setArtifactTab('code')}
-                      className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
-                        artifactTab === 'code' ? 'bg-[#333333] text-white font-bold' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      <span>Code</span>
-                    </button>
+                  {/* Artifact Surface */}
+                  <div className="flex-grow overflow-auto p-4 flex justify-center items-center bg-[#111111]">
+                    {artifactTab === 'preview' ? (
+                      <div
+                        className={`h-full bg-white rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 border border-white/10 flex flex-col ${
+                          viewport === 'mobile' ? 'w-[375px]' : 'w-full'
+                        }`}
+                      >
+                        <iframe
+                          key={previewKey}
+                          srcDoc={compiledSrcDoc}
+                          title="DeployX Live Preview"
+                          sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
+                          className="w-full flex-grow border-0 min-h-[480px]"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full bg-[#171717] rounded-2xl border border-white/10 p-4 font-mono text-xs overflow-auto text-slate-300 select-text leading-relaxed">
+                        <pre>{currentHtml}</pre>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* CHATGPT CONVERSATIONAL COMPANION SURFACE (Time Pass Mode) */
+                <div className="flex-grow flex flex-col h-full bg-[#141414]">
+                  {/* Top Bar */}
+                  <div className="h-12 px-4 bg-[#1a1a1a] border-b border-white/5 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-xs font-bold text-white">ChatGPT Companion</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                        Time Pass Mode
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500">No deployment needed</span>
+                  </div>
+
+                  {/* Hub Body */}
+                  <div className="flex-grow flex flex-col items-center justify-center p-8 text-center space-y-6">
+                    <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-xl shadow-emerald-500/20">
+                      <Bot className="w-8 h-8" />
+                    </div>
+
+                    <div className="max-w-md space-y-2">
+                      <h3 className="text-xl font-bold text-white tracking-tight">
+                        ChatGPT Interactive Companion
+                      </h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        You can chat freely with DeployX just like ChatGPT! Ask questions, explore trivia, tell jokes, get code snippets, or pass the time. Whenever you do want a website, just ask and I will synthesize it instantly.
+                      </p>
+                    </div>
+
+                    {/* Quick interactive prompts */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full text-left">
+                      {[
+                        { label: '😄 Tell a programmer joke', prompt: 'Tell me a funny programmer joke!' },
+                        { label: '🧠 Riddle challenge', prompt: 'Give me a clever riddle to solve!' },
+                        { label: '💡 3 Viral startup ideas', prompt: 'Brainstorm 3 viral and high-potential tech startup ideas.' },
+                        { label: '🐍 Fun Python snippet', prompt: 'Show me an interesting and useful Python script.' },
+                        { label: '🎮 Play 5-Question Trivia', prompt: 'Let us play a 5-question trivia game on science and technology!' },
+                        { label: '🌐 Build a website instead', prompt: 'Build a modern personal portfolio website for me with dark theme and contact form.' }
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          disabled={isGenerating}
+                          onClick={() => {
+                            setChatPrompt(item.prompt);
+                            setTimeout(() => {
+                              const form = document.querySelector('form');
+                              if (form) form.requestSubmit();
+                            }, 50);
+                          }}
+                          className="p-3 rounded-2xl bg-[#1e1e1e] hover:bg-[#252525] border border-white/10 hover:border-emerald-500/30 text-left transition-all group disabled:opacity-50"
+                        >
+                          <p className="text-xs font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                            {item.label}
+                          </p>
+                          <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                            {item.prompt}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-
-                {/* Right: Viewport Controls & Actions */}
-                <div className="flex items-center space-x-2">
-                  {/* Viewport switcher */}
-                  <div className="flex items-center bg-[#242424] p-0.5 rounded-lg border border-white/5">
-                    <button
-                      onClick={() => setViewport('desktop')}
-                      className={`p-1 rounded text-slate-400 hover:text-white ${viewport === 'desktop' ? 'bg-white/10 text-white' : ''}`}
-                      title="Desktop view"
-                    >
-                      <Monitor className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setViewport('mobile')}
-                      className={`p-1 rounded text-slate-400 hover:text-white ${viewport === 'mobile' ? 'bg-white/10 text-white' : ''}`}
-                      title="Mobile view"
-                    >
-                      <Smartphone className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setPreviewKey(k => k + 1)}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                    title="Refresh Preview"
-                  >
-                    <RotateCw className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    onClick={handleCopyCode}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                    title="Copy code"
-                  >
-                    {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Code2 className="w-3 h-3" />}
-                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
-                  </button>
-
-                  <a
-                    href={`/api/projects/${currentProject.id}/export`}
-                    download
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                    title="Download HTML package"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Artifact Surface */}
-              <div className="flex-grow overflow-auto p-4 flex justify-center items-center bg-[#111111]">
-                {artifactTab === 'preview' ? (
-                  <div
-                    className={`h-full bg-white rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 border border-white/10 flex flex-col ${
-                      viewport === 'mobile' ? 'w-[375px]' : 'w-full'
-                    }`}
-                  >
-                    <iframe
-                      key={previewKey}
-                      srcDoc={compiledSrcDoc}
-                      title="DeployX Live Preview"
-                      sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-                      className="w-full flex-grow border-0 min-h-[480px]"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full h-full bg-[#171717] rounded-2xl border border-white/10 p-4 font-mono text-xs overflow-auto text-slate-300 select-text leading-relaxed">
-                    <pre>{currentHtml}</pre>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
         )}

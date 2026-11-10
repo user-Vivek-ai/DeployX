@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { MockAIProvider } from './mock-provider';
 import { GeminiProvider } from './gemini-provider';
+import { ChatGPTProvider } from './chatgpt-provider';
 
 export interface IAIProvider {
   name: string;
@@ -14,6 +15,7 @@ export interface IAIProvider {
   clarify(prompt: string): Promise<ClarificationQuestion[]>;
   generate(request: GenerationRequest): Promise<GenerationResult>;
   refine(prompt: string, currentFiles: ProjectFile[], request: GenerationRequest): Promise<GenerationResult>;
+  chat(message: string): Promise<string>;
 }
 
 export class OpenAIProvider implements IAIProvider {
@@ -72,31 +74,57 @@ export class OpenAIProvider implements IAIProvider {
     const mock = new MockAIProvider();
     return mock.refine(prompt, currentFiles, request);
   }
+
+  public async chat(message: string): Promise<string> {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are DeployX, a witty, helpful and engaging conversational AI assistant like ChatGPT. Converse naturally with the user.'
+            },
+            { role: 'user', content: message }
+          ]
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.choices[0]?.message?.content || 'Hello! How can I help you today?';
+      }
+    } catch {}
+    const mock = new MockAIProvider();
+    return mock.chat(message);
+  }
 }
 
 export class AIProviderFactory {
   public static getProvider(type: AIProviderType = 'auto'): IAIProvider {
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-    // Gemini first (free tier, best for this use case)
+    if (type === 'chatgpt' || type === 'openai') {
+      return new ChatGPTProvider();
+    }
+
+    if (type === 'gemini') {
+      if (geminiKey && !geminiKey.includes('placeholder')) {
+        return new GeminiProvider(geminiKey);
+      }
+      return new ChatGPTProvider();
+    }
+
+    // Auto mode: Use Gemini if key is available, else ChatGPTProvider
     if (geminiKey && !geminiKey.includes('placeholder')) {
       return new GeminiProvider(geminiKey);
     }
 
-    if (type === 'openai' && openaiKey && !openaiKey.includes('placeholder')) {
-      return new OpenAIProvider(openaiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
-    }
-
-    if (type === 'auto') {
-      if (openaiKey && !openaiKey.includes('placeholder')) {
-        return new OpenAIProvider(openaiKey);
-      }
-    }
-
-    // Default to Mock provider if no key configured
-    return new MockAIProvider();
+    return new ChatGPTProvider();
   }
 
   public static getActiveProviderStatus(): {
@@ -107,7 +135,6 @@ export class AIProviderFactory {
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     const geminiConfigured = Boolean(geminiKey && !geminiKey.includes('placeholder'));
     const openaiConfigured = Boolean(process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder'));
-    const anthropicConfigured = Boolean(process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY.includes('placeholder'));
 
     const provider = this.getProvider('auto');
 
@@ -115,10 +142,9 @@ export class AIProviderFactory {
       providerName: provider.name,
       isSimulated: provider.isSimulated,
       available: [
-        { id: 'mock', name: 'Demo AI Provider (Simulation)', configured: true },
-        { id: 'gemini', name: 'Google Gemini 1.5 Flash ✦ Recommended', configured: geminiConfigured },
-        { id: 'openai', name: 'OpenAI (GPT-4o)', configured: openaiConfigured },
-        { id: 'anthropic', name: 'Anthropic (Claude 3.5 Sonnet)', configured: anthropicConfigured },
+        { id: 'chatgpt', name: 'ChatGPT (GPT-4o) ✦ Time Pass & AI Chat', configured: true },
+        { id: 'gemini', name: 'Google Gemini 1.5 Flash ✦ Fast Website Builder', configured: geminiConfigured },
+        { id: 'openai', name: 'OpenAI (GPT-4o Mini)', configured: openaiConfigured },
       ]
     };
   }
