@@ -480,16 +480,19 @@ export function AuthPortal() {
                   </div>
 
                   {demoOtpHint && (
-                    <div className="text-center pt-1">
-                      <p className="text-[10px] text-slate-500">
-                        Mail key not set on Vercel?{' '}
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs space-y-1.5 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-400 font-semibold text-[11px]">Sandbox Delivery Notice</span>
                         <button
                           type="button"
                           onClick={() => setOtpCode(demoOtpHint)}
-                          className="text-brand-400 hover:text-brand-300 underline"
+                          className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg text-[10px] font-semibold transition-colors"
                         >
-                          Fill dev code ({demoOtpHint})
+                          Auto-Fill Code ({demoOtpHint})
                         </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        Resend test domain (<code className="text-slate-300">onboarding@resend.dev</code>) delivers to <code className="text-slate-300">akulavivek2@gmail.com</code>. To deliver to any custom email without restrictions, add Gmail App Password (<code className="text-slate-300">EMAIL_USER</code> &amp; <code className="text-slate-300">EMAIL_PASS</code>) in Vercel.
                       </p>
                     </div>
                   )}

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: result.error || 'Failed to generate verification code' }, { status: 400 });
     }
 
-    // Dispatch real email via Resend, Brevo, SendGrid
+    // Dispatch real email via Gmail SMTP, Resend, Brevo, or SendGrid
     const emailDispatch = await EmailService.sendVerificationOTP({
       toEmail: email.trim(),
       toName: name.trim(),
@@ -35,9 +35,10 @@ export async function POST(req: Request) {
         : `Verification code generated for ${email}.`,
       emailSent: emailDispatch.success,
       serviceConfigured: emailDispatch.serviceConfigured,
+      dispatchError: emailDispatch.error,
       expiresInSeconds: result.expiresInSeconds,
-      // Only include fallback code if no transactional email provider is configured in environment variables
-      fallbackOtp: !emailDispatch.serviceConfigured ? result.demoOtp : undefined
+      // If email delivery was blocked by provider sandbox (e.g. Resend free tier), provide backup code
+      fallbackOtp: !emailDispatch.success ? result.demoOtp : undefined
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to dispatch OTP' }, { status: 500 });

@@ -1,11 +1,4 @@
-/**
- * DeployX Email Dispatch Service
- * Dispatches real 6-digit OTP codes to the user's email inbox using:
- * 1. Resend API (RESEND_API_KEY)
- * 2. Brevo API (BREVO_API_KEY)
- * 3. SendGrid API (SENDGRID_API_KEY)
- * 4. SMTP / Gmail App Password (EMAIL_USER & EMAIL_PASS or SMTP_USER & SMTP_PASS)
- */
+import { SmtpClient } from './smtp-client';
 
 interface SendEmailParams {
   toEmail: string;
@@ -103,18 +96,41 @@ export class EmailService {
   }
 
   /**
-   * Main dispatch method trying configured services in priority order:
-   * 1. Resend API
-   * 2. Brevo API
-   * 3. SendGrid API
-   * 4. Gmail / Nodemailer SMTP
+   * Main dispatch method trying configured services:
+   * 1. Direct Gmail / SMTP (Sends to ANY email address on Earth without domain requirements)
+   * 2. Resend API (Sends to verified domain or account owner email)
+   * 3. Brevo API
+   * 4. SendGrid API
    */
   public static async sendVerificationOTP(params: SendEmailParams): Promise<EmailDispatchResult> {
     const { toEmail, toName, otpCode } = params;
     const html = this.getEmailHtml(toName, otpCode);
     const subject = `Your DeployX Verification Code: ${otpCode}`;
 
-    // 1. Try Resend API (Most reliable for Next.js / Vercel)
+    let lastError = '';
+
+    // 1. Try Direct Gmail / SMTP via Pure Node.js TLS (Sends to ANY recipient without domain verification!)
+    const smtpUser = process.env.EMAIL_USER || process.env.SMTP_USER || process.env.GMAIL_USER;
+    const smtpPass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465;
+
+    if (smtpUser && smtpPass) {
+      try {
+        const sent = await SmtpClient.sendMail(
+          { user: smtpUser, pass: smtpPass, host: smtpHost, port: smtpPort },
+          { to: toEmail, fromName: 'DeployX Security', subject, html }
+        );
+        if (sent) {
+          return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
+        }
+      } catch (err: any) {
+        lastError = `SMTP error: ${err.message}`;
+        console.warn('SMTP dispatch failed:', err.message);
+      }
+    }
+
+    // 2. Try Resend API
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey && !resendKey.includes('placeholder')) {
       try {
@@ -137,14 +153,15 @@ export class EmailService {
           return { success: true, provider: 'Resend', serviceConfigured: true };
         } else {
           const errText = await res.text();
+          lastError = `Resend Notice: Free testing domain (onboarding@resend.dev) restricts delivery. (${errText})`;
           console.warn('Resend dispatch error:', errText);
         }
       } catch (err: any) {
-        console.warn('Resend fetch failed:', err.message);
+        lastError = `Resend connection failed: ${err.message}`;
       }
     }
 
-    // 2. Try Brevo (Sendinblue) API
+    // 3. Try Brevo (Sendinblue) API
     const brevoKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
     if (brevoKey && !brevoKey.includes('placeholder')) {
       try {
@@ -166,11 +183,11 @@ export class EmailService {
           return { success: true, provider: 'Brevo', serviceConfigured: true };
         }
       } catch (err: any) {
-        console.warn('Brevo dispatch error:', err.message);
+        lastError = `Brevo error: ${err.message}`;
       }
     }
 
-    // 3. Try SendGrid API
+    // 4. Try SendGrid API
     const sendgridKey = process.env.SENDGRID_API_KEY;
     if (sendgridKey && !sendgridKey.includes('placeholder')) {
       try {
@@ -192,15 +209,14 @@ export class EmailService {
           return { success: true, provider: 'SendGrid', serviceConfigured: true };
         }
       } catch (err: any) {
-        console.warn('SendGrid dispatch error:', err.message);
+        lastError = `SendGrid error: ${err.message}`;
       }
     }
 
-    // No external email provider is currently configured in environment variables
     return {
       success: false,
-      error: 'No transactional email provider configured yet.',
-      serviceConfigured: false
+      error: lastError || 'No transactional email provider configured yet.',
+      serviceConfigured: Boolean(smtpUser || resendKey || brevoKey || sendgridKey)
     };
   }
 }
