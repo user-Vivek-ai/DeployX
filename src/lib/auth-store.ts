@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { TotpService } from './totp';
 
 export interface UserAccount {
   id: string;
@@ -21,6 +22,17 @@ interface PendingRegistration {
   attemptsRemaining: number;
   verified: boolean;
   rawCodeForDemo?: string;
+}
+
+interface PendingTotpRegistration {
+  email: string;
+  name: string;
+  passwordHash: string;
+  salt: string;
+  secret: string;
+  otpAuthUrl: string;
+  qrCodeUrl: string;
+  expiresAt: number;
 }
 
 const USERS_FILE = path.join(os.tmpdir(), '.deployx_users.json');
@@ -57,6 +69,7 @@ export function validatePassword(password: string): {
 export class AuthStore {
   private static users: Map<string, UserAccount> = new Map();
   private static pendingRegistrations: Map<string, PendingRegistration> = new Map();
+  private static pendingTotpRegistrations: Map<string, PendingTotpRegistration> = new Map();
   private static sessions: Map<string, { userId: string; expiresAt: number }> = new Map();
   private static initialized = false;
 
@@ -253,6 +266,131 @@ export class AuthStore {
 
     return {
       success: true,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email
+      }
+    };
+  }
+
+  /**
+   * Microsoft Authenticator TOTP: Stage 1 Setup
+   * Receives Name, Email, Password, generates a secret key & QR code URL.
+   */
+  public static initiateTotpSignup(email: string, name: string, password: string): {
+    success: boolean;
+    secret?: string;
+    otpAuthUrl?: string;
+    qrCodeUrl?: string;
+    error?: string;
+  } {
+    this.init();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    if (!cleanEmail || !cleanName || !password) {
+      return { success: false, error: 'Name, email, and password are all required.' };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+
+    if (this.users.has(cleanEmail)) {
+      return { success: false, error: 'An account with this email already exists. Please log in.' };
+    }
+
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      return { success: false, error: `Password requirements: ${validation.errors.join(', ')}` };
+    }
+
+    // Generate TOTP Secret & URLs
+    const secret = TotpService.generateSecret(20);
+    const otpAuthUrl = TotpService.getOtpAuthUrl(cleanEmail, secret, 'DeployX');
+    const qrCodeUrl = TotpService.getQrCodeUrl(otpAuthUrl);
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(password, salt);
+
+    this.pendingTotpRegistrations.set(cleanEmail, {
+      email: cleanEmail,
+      name: cleanName,
+      passwordHash,
+      salt,
+      secret,
+      otpAuthUrl,
+      qrCodeUrl,
+      expiresAt: Date.now() + 15 * 60 * 1000 // 15 minutes to scan
+    });
+
+    return {
+      success: true,
+      secret,
+      otpAuthUrl,
+      qrCodeUrl
+    };
+  }
+
+  /**
+   * Microsoft Authenticator TOTP: Stage 2 Verification
+   * Validates the 6-digit code from Microsoft Authenticator and completes registration.
+   */
+  public static verifyAndCompleteTotpSignup(email: string, code: string): {
+    success: boolean;
+    token?: string;
+    user?: { id: string; name: string; email: string };
+    error?: string;
+  } {
+    this.init();
+    const cleanEmail = email.trim().toLowerCase();
+    const pending = this.pendingTotpRegistrations.get(cleanEmail);
+
+    if (!pending) {
+      return { success: false, error: 'No active authenticator session found. Please fill in your signup details again.' };
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      this.pendingTotpRegistrations.delete(cleanEmail);
+      return { success: false, error: 'QR Code setup expired. Please start again.' };
+    }
+
+    // Verify TOTP code against secret
+    const isValid = TotpService.verifyToken(code, pending.secret);
+    if (!isValid) {
+      return {
+        success: false,
+        error: 'Invalid 6-digit code. Please enter the current code shown in your Microsoft Authenticator app.'
+      };
+    }
+
+    // Code is valid! Create the user account
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newUser: UserAccount = {
+      id: userId,
+      name: pending.name,
+      email: cleanEmail,
+      salt: pending.salt,
+      passwordHash: pending.passwordHash,
+      createdAt: new Date().toISOString()
+    };
+
+    this.users.set(cleanEmail, newUser);
+    this.pendingTotpRegistrations.delete(cleanEmail);
+    this.saveToDisk();
+
+    // Create session token (valid 7 days)
+    const token = crypto.randomBytes(32).toString('hex');
+    this.sessions.set(token, {
+      userId: newUser.id,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    });
+
+    return {
+      success: true,
+      token,
       user: {
         id: newUser.id,
         name: newUser.name,
