@@ -18,7 +18,7 @@ export class GeminiProvider {
     this.apiKey = apiKey;
   }
 
-  private async callGemini(prompt: string): Promise<string> {
+  public async callGemini(prompt: string): Promise<string> {
     const response = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -42,7 +42,7 @@ export class GeminiProvider {
     return text;
   }
 
-  public async clarify(): Promise<ClarificationQuestion[]> {
+  public async clarify(prompt?: string): Promise<ClarificationQuestion[]> {
     return [];
   }
 
@@ -167,7 +167,7 @@ REQUIREMENTS:
     }
   }
 
-  public async refine(prompt: string, currentFiles: ProjectFile[]): Promise<GenerationResult> {
+  public async refine(prompt: string, currentFiles: ProjectFile[], request?: GenerationRequest): Promise<GenerationResult> {
     const currentHtml = currentFiles.find(f => f.path === 'index.html')?.content || '';
     const lower = prompt.toLowerCase();
 

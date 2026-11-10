@@ -164,12 +164,12 @@ export default function ClaudeAppPage() {
     }
   };
 
-  // Handle sending chat message to refine website
-  const handleSendChatMessage = async (e?: React.FormEvent) => {
+  // Handle sending chat message to refine website or casual chat
+  const handleSendChatMessage = async (e?: React.FormEvent, directText?: string) => {
     if (e) e.preventDefault();
-    if (!chatPrompt.trim() || isGenerating || !currentProject) return;
+    const text = (directText || chatPrompt).trim();
+    if (!text || isGenerating || !currentProject) return;
 
-    const text = chatPrompt.trim();
     setChatPrompt('');
     setIsGenerating(true);
 
@@ -180,7 +180,7 @@ export default function ClaudeAppPage() {
         body: JSON.stringify({
           projectId: currentProject.id,
           prompt: text,
-          currentFiles: currentProject.files
+          currentFiles: currentProject.files || []
         })
       });
 
@@ -475,11 +475,11 @@ export default function ClaudeAppPage() {
                 <span className="text-slate-400">DeployX /</span>
                 <span className="font-bold text-white truncate max-w-xs">{currentProject.name}</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                  currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || currentProject.files.length === 0
+                  currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || !currentProject.files || currentProject.files.length === 0
                     ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                     : 'bg-brand-500/15 text-brand-300 border-brand-500/30'
                 }`}>
-                  {currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || currentProject.files.length === 0 ? '🟢 ChatGPT' : '✨ Gemini 1.5'}
+                  {currentProject.aiProvider === 'chatgpt' || currentProject.tags?.includes('ChatGPT') || !currentProject.files || currentProject.files.length === 0 ? '🟢 ChatGPT' : '✨ Gemini 1.5'}
                 </span>
               </div>
             )}
@@ -491,7 +491,7 @@ export default function ClaudeAppPage() {
               Free plan · <span className="text-white hover:underline cursor-pointer">Upgrade</span>
             </span>
 
-            {currentProject && currentProject.files.length > 0 && (
+            {currentProject && currentProject.files && currentProject.files.length > 0 && (
               <button
                 onClick={handleDeploy}
                 disabled={isDeploying}
@@ -789,7 +789,7 @@ export default function ClaudeAppPage() {
             {/* RIGHT PANE: CLAUDE ARTIFACT PANEL / CHATGPT COMPANION */}
             {/* --------------------------------------------------------------------- */}
             <div className="hidden lg:flex w-[55%] h-full flex-col bg-[#141414] overflow-hidden">
-              {currentProject.files.length > 0 ? (
+              {currentProject.files && currentProject.files.length > 0 ? (
                 <>
                   {/* Artifact Toolbar */}
                   <div className="h-12 px-4 bg-[#1a1a1a] border-b border-white/5 flex items-center justify-between flex-shrink-0">
@@ -936,13 +936,7 @@ export default function ClaudeAppPage() {
                         <button
                           key={item.label}
                           disabled={isGenerating}
-                          onClick={() => {
-                            setChatPrompt(item.prompt);
-                            setTimeout(() => {
-                              const form = document.querySelector('form');
-                              if (form) form.requestSubmit();
-                            }, 50);
-                          }}
+                          onClick={() => handleSendChatMessage(undefined, item.prompt)}
                           className="p-3 rounded-2xl bg-[#1e1e1e] hover:bg-[#252525] border border-white/10 hover:border-emerald-500/30 text-left transition-all group disabled:opacity-50"
                         >
                           <p className="text-xs font-semibold text-white group-hover:text-emerald-400 transition-colors">
