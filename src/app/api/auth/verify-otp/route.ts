@@ -24,11 +24,19 @@ export async function POST(req: Request) {
 
     const result = AuthStore.verifyOTPAndCompleteRegistration(cleanEmail, cleanCode);
 
-    if (!result.success || !result.token) {
+    if (!result.success) {
       return NextResponse.json(
         { error: result.error || 'Verification failed.' },
         { status: 400 }
       );
+    }
+
+    if ((result as any).needsPassword) {
+      return NextResponse.json({
+        success: true,
+        message: 'Email successfully verified with OTP! Please create your password.',
+        needsPassword: true
+      });
     }
 
     const response = NextResponse.json({

@@ -120,7 +120,7 @@ export class AuthStore {
    * - Hashes OTP using HMAC-SHA256
    * - Sets 5-minute expiry & 5 max attempts
    */
-  public static initiateRegistration(name: string, email: string, password: string): {
+  public static initiateRegistration(name: string, email: string, password?: string): {
     success: boolean;
     error?: string;
     otpCode?: string;
@@ -145,14 +145,20 @@ export class AuthStore {
       };
     }
 
-    // Password validation
-    const validation = validatePassword(password);
-    if (!validation.valid) {
-      return {
-        success: false,
-        error: `Password requirements not met: ${validation.errors.join(', ')}`,
-        expiresInSeconds: 0
-      };
+    // Password validation (if provided at step 1)
+    let passSalt = '';
+    let passwordHash = '';
+    if (password) {
+      const validation = validatePassword(password);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: `Password requirements not met: ${validation.errors.join(', ')}`,
+          expiresInSeconds: 0
+        };
+      }
+      passSalt = crypto.randomBytes(16).toString('hex');
+      passwordHash = this.hashPassword(password, passSalt);
     }
 
     // Check 60-second cooldown
@@ -171,10 +177,6 @@ export class AuthStore {
     const rawOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpSalt = `deployx_otp_${cleanEmail}`;
     const otpHash = crypto.createHmac('sha256', otpSalt).update(rawOtp).digest('hex');
-
-    // Hash password with PBKDF2
-    const passSalt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = this.hashPassword(password, passSalt);
 
     this.pendingRegistrations.set(cleanEmail, {
       email: cleanEmail,
@@ -300,7 +302,16 @@ export class AuthStore {
     const inputHash = crypto.createHmac('sha256', otpSalt).update(cleanCode).digest('hex');
 
     if (crypto.timingSafeEqual(Buffer.from(inputHash), Buffer.from(pending.otpHash))) {
-      // Code is correct! Create user account
+      // If user has not yet entered password (3-step flow), mark verified and advance to password step
+      if (!pending.passwordHash) {
+        pending.verified = true;
+        return {
+          success: true,
+          needsPassword: true
+        };
+      }
+
+      // Code is correct and password exists! Create user account
       const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       const newUser: UserAccount = {
         id: userId,

@@ -23,8 +23,8 @@ export function AuthPortal() {
   // Mode: 'signup' vs 'login'
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
 
-  // Multi-step signup: 1 = Details & Password, 2 = 6-Digit Email OTP Verification
-  const [signupStep, setSignupStep] = useState<1 | 2>(1);
+  // Multi-step signup: 1 = Details, 2 = OTP Verification, 3 = Password
+  const [signupStep, setSignupStep] = useState<1 | 2 | 3>(1);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -97,7 +97,7 @@ export function AuthPortal() {
   const isPasswordValid = hasMinLength && hasUpper && hasLower && hasNumber && passwordsMatch;
 
   // Step 1: Submit Details & Dispatch Real Email OTP
-  const handleRegisterAndSendOtp = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -105,13 +105,8 @@ export function AuthPortal() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
-    if (!cleanName || !cleanEmail || !password || !confirmPassword) {
-      setErrorMsg('Please fill in your name, email, password, and confirmation.');
-      return;
-    }
-
-    if (!isPasswordValid) {
-      setErrorMsg('Please ensure your password meets all requirements and matches.');
+    if (!cleanName || !cleanEmail) {
+      setErrorMsg('Please enter both your name and email address.');
       return;
     }
 
@@ -122,8 +117,7 @@ export function AuthPortal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: cleanName,
-          email: cleanEmail,
-          password
+          email: cleanEmail
         })
       });
 
@@ -139,7 +133,7 @@ export function AuthPortal() {
       setResendCooldown(data.resendCooldownSeconds || 60);
       setSuccessMsg(`✓ 6-Digit verification code dispatched to ${cleanEmail}. Check your inbox and spam folder.`);
     } catch {
-      setErrorMsg('Network error. Please verify your internet connection and try again.');
+      setErrorMsg('Network error. Please verify your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -184,7 +178,7 @@ export function AuthPortal() {
     }
   };
 
-  // Step 2: Verify 6-Digit OTP & Complete Account Registration
+  // Step 2: Verify 6-Digit OTP & Advance to Password Step
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -219,16 +213,66 @@ export function AuthPortal() {
         return;
       }
 
-      // Success! Update auth state and enter DeployX
-      setSuccessMsg('✓ Email verified successfully! Loading your workspace...');
-      if (data.user) {
-        setUser(data.user);
+      if (data.needsPassword) {
+        setSuccessMsg('✓ Email verified successfully! Now create your password.');
+        setSignupStep(3);
+      } else {
+        setSuccessMsg('✓ Account created successfully! Logging you in...');
+        if (data.user) {
+          setUser(data.user);
+        }
+        setTimeout(() => {
+          window.location.reload();
+        }, 700);
       }
-      setTimeout(() => {
-        window.location.reload();
-      }, 700);
     } catch {
       setErrorMsg('Network error during verification.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3: Complete Signup with Password
+  const handleCompleteSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!isPasswordValid) {
+      setErrorMsg('Please ensure your password meets all requirements and matches.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMsg(data.error || 'Failed to complete registration.');
+        return;
+      }
+
+      setSuccessMsg('✓ Account created successfully! Logging in...');
+      // Automatic login
+      const loginRes = await login(email.trim().toLowerCase(), password);
+      if (loginRes.success) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        setMode('login');
+      }
+    } catch {
+      setErrorMsg('Network error during registration completion.');
     } finally {
       setIsLoading(false);
     }
@@ -379,7 +423,7 @@ export function AuthPortal() {
           )}
 
           {/* ============================================================== */}
-          {/* SIGNUP FLOW (REAL EMAIL OTP VERIFICATION)                       */}
+          {/* SIGNUP FLOW (3-STEP: DETAILS -> OTP -> PASSWORD)               */}
           {/* ============================================================== */}
           {mode === 'signup' && (
             <div>
@@ -387,20 +431,25 @@ export function AuthPortal() {
               <div className="flex items-center justify-between mb-5 px-1">
                 <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 1 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>1</span>
-                  <span className={signupStep === 1 ? 'text-white' : ''}>Account Details</span>
+                  <span className={signupStep === 1 ? 'text-white' : ''}>Details</span>
                 </div>
-                <div className="w-12 h-[1px] bg-white/10" />
+                <div className="w-8 h-[1px] bg-white/10" />
                 <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 2 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>2</span>
-                  <span className={signupStep === 2 ? 'text-white' : ''}>Email OTP</span>
+                  <span className={signupStep === 2 ? 'text-white' : ''}>OTP</span>
+                </div>
+                <div className="w-8 h-[1px] bg-white/10" />
+                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 3 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>3</span>
+                  <span className={signupStep === 3 ? 'text-white' : ''}>Password</span>
                 </div>
               </div>
 
-              {/* STAGE 1: Name, Email, Password, Confirm Password */}
+              {/* STAGE 1: Full Name & Email Address */}
               {signupStep === 1 && (
-                <form onSubmit={handleRegisterAndSendOtp} className="space-y-3.5">
+                <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                       Full Name
                     </label>
                     <div className="relative">
@@ -417,8 +466,8 @@ export function AuthPortal() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Gmail Address
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Email Address
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
@@ -433,84 +482,18 @@ export function AuthPortal() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Enter Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Create a strong password"
-                        required
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter your password"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Password Requirement Checklist */}
-                  {password.length > 0 && (
-                    <div className="p-2.5 bg-[#212121] rounded-xl border border-white/5 space-y-1 text-[11px]">
-                      <div className="grid grid-cols-2 gap-1 text-[10px]">
-                        <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasMinLength ? '✓' : '•'} 8+ characters</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasUpper ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasUpper ? '✓' : '•'} 1 uppercase (A-Z)</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasLower ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasLower ? '✓' : '•'} 1 lowercase (a-z)</span>
-                        </span>
-                        <span className={`flex items-center space-x-1 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          <span>{hasNumber ? '✓' : '•'} 1 number (0-9)</span>
-                        </span>
-                      </div>
-                      {confirmPassword.length > 0 && (
-                        <div className={`pt-1 text-[10px] font-semibold ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   <button
                     type="submit"
-                    disabled={isLoading || !name.trim() || !email.trim() || !isPasswordValid}
+                    disabled={isLoading || !name.trim() || !email.trim()}
                     className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
                   >
-                    <span>{isLoading ? 'Sending Verification Code...' : 'Register & Send OTP'}</span>
+                    <span>{isLoading ? 'Sending Verification OTP...' : 'Verify Email with OTP'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </form>
               )}
 
-              {/* STAGE 2: 6-Digit Verification Code Entry */}
+              {/* STAGE 2: 6-Digit Email Verification Code */}
               {signupStep === 2 && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="p-3 bg-[#212121] rounded-2xl border border-white/10 text-xs">
@@ -573,10 +556,90 @@ export function AuthPortal() {
                       disabled={isLoading || otpCode.length !== 6 || timerSeconds <= 0}
                       className="w-2/3 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
                     >
-                      <span>{isLoading ? 'Verifying...' : 'Verify OTP & Log In'}</span>
+                      <span>{isLoading ? 'Verifying...' : 'Verify OTP'}</span>
                       <Check className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                </form>
+              )}
+
+              {/* STAGE 3: Set Password */}
+              {signupStep === 3 && (
+                <form onSubmit={handleCompleteSignup} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Create Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Create a strong password"
+                        required
+                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter your password"
+                        required
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password Requirement Checklist */}
+                  {password.length > 0 && (
+                    <div className="p-2.5 bg-[#212121] rounded-xl border border-white/5 space-y-1 text-[11px]">
+                      <div className="grid grid-cols-2 gap-1 text-[10px]">
+                        <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          <span>{hasMinLength ? '✓' : '•'} 8+ characters</span>
+                        </span>
+                        <span className={`flex items-center space-x-1 ${hasUpper ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          <span>{hasUpper ? '✓' : '•'} 1 uppercase (A-Z)</span>
+                        </span>
+                        <span className={`flex items-center space-x-1 ${hasLower ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          <span>{hasLower ? '✓' : '•'} 1 lowercase (a-z)</span>
+                        </span>
+                        <span className={`flex items-center space-x-1 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          <span>{hasNumber ? '✓' : '•'} 1 number (0-9)</span>
+                        </span>
+                      </div>
+                      {confirmPassword.length > 0 && (
+                        <div className={`pt-1 text-[10px] font-semibold ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !isPasswordValid}
+                    className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+                  >
+                    <span>{isLoading ? 'Creating Account...' : 'Create Account & Log In'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </form>
               )}
             </div>

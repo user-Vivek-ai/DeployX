@@ -23,15 +23,14 @@ export async function POST(req: Request) {
       if (!name || !name.trim()) {
         return NextResponse.json({ error: 'Full name is required.' }, { status: 400 });
       }
-      if (!password) {
-        return NextResponse.json({ error: 'Password is required.' }, { status: 400 });
-      }
-      const validation = validatePassword(password);
-      if (!validation.valid) {
-        return NextResponse.json(
-          { error: `Password requirements not met: ${validation.errors.join(', ')}` },
-          { status: 422 }
-        );
+      if (password) {
+        const validation = validatePassword(password);
+        if (!validation.valid) {
+          return NextResponse.json(
+            { error: `Password requirements not met: ${validation.errors.join(', ')}` },
+            { status: 422 }
+          );
+        }
       }
       result = AuthStore.initiateRegistration(name.trim(), cleanEmail, password);
     }
