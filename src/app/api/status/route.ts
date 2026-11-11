@@ -37,10 +37,14 @@ export async function GET() {
       deploymentProvider: process.env.DEPLOYMENT_PROVIDER || 'local',
       email: {
         smtpUserConfigured: Boolean(smtpUser),
-        smtpUser: smtpUser ? `${smtpUser.slice(0, 3)}***@${smtpUser.split('@')[1] || 'domain'}` : null,
+        smtpUserValidFormat: Boolean(smtpUser && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(smtpUser.trim())),
+        smtpUserValue: smtpUser ? (smtpUser.includes('@') ? `${smtpUser.slice(0, 3)}***@${smtpUser.split('@')[1]}` : `INVALID_NOT_EMAIL("${smtpUser.slice(0, 4)}***")`) : null,
         smtpPassConfigured: Boolean(smtpPass),
+        smtpPassLength: smtpPass ? smtpPass.replace(/\s+/g, '').length : 0,
         resendConfigured: Boolean(resendKey && !resendKey.includes('placeholder')),
-        activeEngine: (smtpUser && smtpPass) ? 'Gmail SMTP' : (resendKey ? 'Resend' : 'None')
+        fromEmailConfigured: Boolean(process.env.FROM_EMAIL || process.env.EMAIL_FROM),
+        fromEmailValue: process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'onboarding@resend.dev (Sandbox - delivers only to account owner)',
+        activeEngine: (smtpUser && smtpPass && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(smtpUser.trim())) ? 'Gmail SMTP' : (resendKey ? 'Resend API' : 'None')
       }
     },
     serverTime: new Date().toISOString()

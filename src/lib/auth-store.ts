@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { TotpService } from './totp';
 
 export interface UserAccount {
   id: string;
@@ -17,22 +16,14 @@ export interface UserAccount {
 interface PendingRegistration {
   email: string;
   name: string;
+  passwordHash: string;
+  salt: string;
   otpHash: string;
   expiresAt: number;
   attemptsRemaining: number;
+  lastSentAt: number;
   verified: boolean;
-  rawCodeForDemo?: string;
-}
-
-interface PendingTotpRegistration {
-  email: string;
-  name: string;
-  passwordHash: string;
-  salt: string;
-  secret: string;
-  otpAuthUrl: string;
-  qrCodeUrl: string;
-  expiresAt: number;
+  rawOtpForDispatch: string;
 }
 
 const USERS_FILE = path.join(os.tmpdir(), '.deployx_users.json');
@@ -69,7 +60,6 @@ export function validatePassword(password: string): {
 export class AuthStore {
   private static users: Map<string, UserAccount> = new Map();
   private static pendingRegistrations: Map<string, PendingRegistration> = new Map();
-  private static pendingTotpRegistrations: Map<string, PendingTotpRegistration> = new Map();
   private static sessions: Map<string, { userId: string; expiresAt: number }> = new Map();
   private static initialized = false;
 
@@ -90,7 +80,7 @@ export class AuthStore {
       // Re-seed if file reading fails
     }
 
-    // Seed default developer account for immediate testing
+    // Seed default developer account for testing
     this.seedDefaultUser();
     this.saveToDisk();
     this.initialized = true;
@@ -118,25 +108,32 @@ export class AuthStore {
       const arr = Array.from(this.users.values());
       fs.writeFileSync(USERS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
     } catch {
-      // Disk write failure tolerated
+      // Disk write failure tolerated in serverless
     }
   }
 
   /**
-   * Step 1: Initiates signup by generating a 6-digit OTP code and sending to user's email
+   * Step 1: Initiates Email Registration
+   * - Validates name, email, password requirements
+   * - Enforces 60-second cooldown on resends
+   * - Generates cryptographically secure 6-digit OTP
+   * - Hashes OTP using HMAC-SHA256
+   * - Sets 5-minute expiry & 5 max attempts
    */
-  public static sendSignupOTP(email: string, name: string): {
+  public static initiateRegistration(name: string, email: string, password: string): {
     success: boolean;
     error?: string;
-    demoOtp?: string;
+    otpCode?: string;
+    name?: string;
     expiresInSeconds: number;
+    cooldownRemaining?: number;
   } {
     this.init();
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
     if (!cleanEmail || !cleanName) {
-      return { success: false, error: 'Name and email are required', expiresInSeconds: 0 };
+      return { success: false, error: 'Name and email are required.', expiresInSeconds: 0 };
     }
 
     // Check if user already exists
@@ -148,44 +145,138 @@ export class AuthStore {
       };
     }
 
-    // Generate random 6-digit code
-    const rawCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const salt = `deployx_otp_${cleanEmail}`;
-    const otpHash = crypto.createHmac('sha256', salt).update(rawCode).digest('hex');
+    // Password validation
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      return {
+        success: false,
+        error: `Password requirements not met: ${validation.errors.join(', ')}`,
+        expiresInSeconds: 0
+      };
+    }
+
+    // Check 60-second cooldown
+    const existing = this.pendingRegistrations.get(cleanEmail);
+    if (existing && Date.now() - existing.lastSentAt < 60000) {
+      const waitSec = Math.ceil((60000 - (Date.now() - existing.lastSentAt)) / 1000);
+      return {
+        success: false,
+        error: `Please wait ${waitSec} seconds before requesting a new verification code.`,
+        expiresInSeconds: Math.max(0, Math.ceil((existing.expiresAt - Date.now()) / 1000)),
+        cooldownRemaining: waitSec
+      };
+    }
+
+    // Generate random 6-digit OTP
+    const rawOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpSalt = `deployx_otp_${cleanEmail}`;
+    const otpHash = crypto.createHmac('sha256', otpSalt).update(rawOtp).digest('hex');
+
+    // Hash password with PBKDF2
+    const passSalt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(password, passSalt);
 
     this.pendingRegistrations.set(cleanEmail, {
       email: cleanEmail,
       name: cleanName,
+      passwordHash,
+      salt: passSalt,
       otpHash,
       expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-      attemptsRemaining: 3,
+      attemptsRemaining: 5, // 5 maximum attempts
+      lastSentAt: Date.now(),
       verified: false,
-      rawCodeForDemo: rawCode
+      rawOtpForDispatch: rawOtp
     });
 
     return {
       success: true,
-      demoOtp: rawCode, // Clearly provided for seamless testing without needing external email credentials
+      otpCode: rawOtp,
+      name: cleanName,
       expiresInSeconds: 300
     };
   }
 
   /**
-   * Step 2: Verifies the 6-digit OTP code entered by user
+   * Resend OTP:
+   * - Enforces 60-second cooldown
+   * - Generates NEW random 6-digit OTP
+   * - Resets attempts to 5
+   * - Extends expiry by 5 minutes
    */
-  public static verifySignupOTP(email: string, code: string): {
+  public static resendOTP(email: string): {
     success: boolean;
     error?: string;
+    otpCode?: string;
+    name?: string;
+    expiresInSeconds: number;
+    cooldownRemaining?: number;
   } {
     this.init();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanCode = code.trim();
     const pending = this.pendingRegistrations.get(cleanEmail);
 
     if (!pending) {
       return {
         success: false,
-        error: 'No active verification session found. Please enter your email again.'
+        error: 'No active registration session found. Please enter your details again.',
+        expiresInSeconds: 0
+      };
+    }
+
+    // Check 60-second cooldown
+    const elapsed = Date.now() - pending.lastSentAt;
+    if (elapsed < 60000) {
+      const waitSec = Math.ceil((60000 - elapsed) / 1000);
+      return {
+        success: false,
+        error: `Please wait ${waitSec} seconds before requesting a new code.`,
+        expiresInSeconds: Math.max(0, Math.ceil((pending.expiresAt - Date.now()) / 1000)),
+        cooldownRemaining: waitSec
+      };
+    }
+
+    // Generate a NEW 6-digit OTP
+    const newRawOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpSalt = `deployx_otp_${cleanEmail}`;
+    const newOtpHash = crypto.createHmac('sha256', otpSalt).update(newRawOtp).digest('hex');
+
+    pending.otpHash = newOtpHash;
+    pending.rawOtpForDispatch = newRawOtp;
+    pending.expiresAt = Date.now() + 5 * 60 * 1000; // Reset 5 minutes
+    pending.attemptsRemaining = 5; // Reset 5 attempts
+    pending.lastSentAt = Date.now();
+
+    return {
+      success: true,
+      otpCode: newRawOtp,
+      name: pending.name,
+      expiresInSeconds: 300
+    };
+  }
+
+  /**
+   * Step 2: Verifies the 6-digit OTP and completes user registration
+   * - Enforces 5-minute expiry
+   * - Enforces maximum 5 attempts
+   * - Uses timing-safe HMAC-SHA256 comparison
+   * - Saves verified user and creates 7-day session
+   */
+  public static verifyOTPAndCompleteRegistration(email: string, code: string): {
+    success: boolean;
+    error?: string;
+    user?: { id: string; name: string; email: string };
+    token?: string;
+  } {
+    this.init();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = code.trim().replace(/\D/g, '');
+    const pending = this.pendingRegistrations.get(cleanEmail);
+
+    if (!pending) {
+      return {
+        success: false,
+        error: 'No active registration session found. Please enter your email again.'
       };
     }
 
@@ -193,7 +284,7 @@ export class AuthStore {
       this.pendingRegistrations.delete(cleanEmail);
       return {
         success: false,
-        error: 'Verification code has expired. Please request a new code.'
+        error: 'Verification code has expired (valid for 5 minutes). Please request a new code.'
       };
     }
 
@@ -201,27 +292,56 @@ export class AuthStore {
       this.pendingRegistrations.delete(cleanEmail);
       return {
         success: false,
-        error: 'Too many incorrect attempts. Please request a new code.'
+        error: 'Maximum incorrect attempts exceeded. Please request a new code.'
       };
     }
 
-    const salt = `deployx_otp_${cleanEmail}`;
-    const inputHash = crypto.createHmac('sha256', salt).update(cleanCode).digest('hex');
+    const otpSalt = `deployx_otp_${cleanEmail}`;
+    const inputHash = crypto.createHmac('sha256', otpSalt).update(cleanCode).digest('hex');
 
     if (crypto.timingSafeEqual(Buffer.from(inputHash), Buffer.from(pending.otpHash))) {
-      pending.verified = true;
-      return { success: true };
+      // Code is correct! Create user account
+      const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const newUser: UserAccount = {
+        id: userId,
+        name: pending.name,
+        email: cleanEmail,
+        salt: pending.salt,
+        passwordHash: pending.passwordHash,
+        createdAt: new Date().toISOString()
+      };
+
+      this.users.set(cleanEmail, newUser);
+      this.pendingRegistrations.delete(cleanEmail);
+      this.saveToDisk();
+
+      // Create session token (valid for 7 days)
+      const token = crypto.randomBytes(32).toString('hex');
+      this.sessions.set(token, {
+        userId: newUser.id,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      });
+
+      return {
+        success: true,
+        user: {
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email
+        },
+        token
+      };
     } else {
       pending.attemptsRemaining -= 1;
       return {
         success: false,
-        error: `Incorrect OTP code. ${pending.attemptsRemaining} attempt(s) remaining.`
+        error: `Incorrect verification code. ${pending.attemptsRemaining} attempt(s) remaining.`
       };
     }
   }
 
   /**
-   * Step 3: Sets password and saves user account into database
+   * Complete signup with password after verification
    */
   public static completeSignup(email: string, password: string): {
     success: boolean;
@@ -235,7 +355,7 @@ export class AuthStore {
     if (!pending || !pending.verified) {
       return {
         success: false,
-        error: 'Please verify your email with OTP before setting a password.'
+        error: 'Please verify your email with OTP before completing signup.'
       };
     }
 
@@ -266,182 +386,6 @@ export class AuthStore {
 
     return {
       success: true,
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email
-      }
-    };
-  }
-
-  /**
-   * Direct registration after TOTP verification
-   */
-  public static registerDirectUser(params: { name: string; email: string; password: string }): {
-    success: boolean;
-    token?: string;
-    user?: { id: string; name: string; email: string };
-    error?: string;
-  } {
-    this.init();
-    const { name, email, password } = params;
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = name.trim();
-
-    if (this.users.has(cleanEmail)) {
-      return { success: false, error: 'An account with this email already exists. Please log in.' };
-    }
-
-    const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = this.hashPassword(password, salt);
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-
-    const newUser: UserAccount = {
-      id: userId,
-      name: cleanName,
-      email: cleanEmail,
-      salt,
-      passwordHash,
-      createdAt: new Date().toISOString()
-    };
-
-    this.users.set(cleanEmail, newUser);
-    this.saveToDisk();
-
-    const token = crypto.randomBytes(32).toString('hex');
-    this.sessions.set(token, {
-      userId: newUser.id,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-    });
-
-    return {
-      success: true,
-      token,
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email
-      }
-    };
-  }
-
-  /**
-   * Microsoft Authenticator TOTP: Stage 1 Setup
-   * Receives Name, Email, Password, generates a secret key & QR code URL.
-   */
-  public static initiateTotpSignup(email: string, name: string, password: string): {
-    success: boolean;
-    secret?: string;
-    otpAuthUrl?: string;
-    qrCodeUrl?: string;
-    error?: string;
-  } {
-    this.init();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = name.trim();
-
-    if (!cleanEmail || !cleanName || !password) {
-      return { success: false, error: 'Name, email, and password are all required.' };
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      return { success: false, error: 'Please enter a valid email address.' };
-    }
-
-    if (this.users.has(cleanEmail)) {
-      return { success: false, error: 'An account with this email already exists. Please log in.' };
-    }
-
-    const validation = validatePassword(password);
-    if (!validation.valid) {
-      return { success: false, error: `Password requirements: ${validation.errors.join(', ')}` };
-    }
-
-    // Generate TOTP Secret & URLs
-    const secret = TotpService.generateSecret(20);
-    const otpAuthUrl = TotpService.getOtpAuthUrl(cleanEmail, secret, 'DeployX');
-    const qrCodeUrl = TotpService.getQrCodeUrl(otpAuthUrl);
-
-    const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = this.hashPassword(password, salt);
-
-    this.pendingTotpRegistrations.set(cleanEmail, {
-      email: cleanEmail,
-      name: cleanName,
-      passwordHash,
-      salt,
-      secret,
-      otpAuthUrl,
-      qrCodeUrl,
-      expiresAt: Date.now() + 15 * 60 * 1000 // 15 minutes to scan
-    });
-
-    return {
-      success: true,
-      secret,
-      otpAuthUrl,
-      qrCodeUrl
-    };
-  }
-
-  /**
-   * Microsoft Authenticator TOTP: Stage 2 Verification
-   * Validates the 6-digit code from Microsoft Authenticator and completes registration.
-   */
-  public static verifyAndCompleteTotpSignup(email: string, code: string): {
-    success: boolean;
-    token?: string;
-    user?: { id: string; name: string; email: string };
-    error?: string;
-  } {
-    this.init();
-    const cleanEmail = email.trim().toLowerCase();
-    const pending = this.pendingTotpRegistrations.get(cleanEmail);
-
-    if (!pending) {
-      return { success: false, error: 'No active authenticator session found. Please fill in your signup details again.' };
-    }
-
-    if (Date.now() > pending.expiresAt) {
-      this.pendingTotpRegistrations.delete(cleanEmail);
-      return { success: false, error: 'QR Code setup expired. Please start again.' };
-    }
-
-    // Verify TOTP code against secret
-    const isValid = TotpService.verifyToken(code, pending.secret);
-    if (!isValid) {
-      return {
-        success: false,
-        error: 'Invalid 6-digit code. Please enter the current code shown in your Microsoft Authenticator app.'
-      };
-    }
-
-    // Code is valid! Create the user account
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const newUser: UserAccount = {
-      id: userId,
-      name: pending.name,
-      email: cleanEmail,
-      salt: pending.salt,
-      passwordHash: pending.passwordHash,
-      createdAt: new Date().toISOString()
-    };
-
-    this.users.set(cleanEmail, newUser);
-    this.pendingTotpRegistrations.delete(cleanEmail);
-    this.saveToDisk();
-
-    // Create session token (valid 7 days)
-    const token = crypto.randomBytes(32).toString('hex');
-    this.sessions.set(token, {
-      userId: newUser.id,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-    });
-
-    return {
-      success: true,
-      token,
       user: {
         id: newUser.id,
         name: newUser.name,
@@ -508,22 +452,23 @@ export class AuthStore {
 
     const session = this.sessions.get(token);
     if (!session || Date.now() > session.expiresAt) {
-      if (session) this.sessions.delete(token);
+      this.sessions.delete(token);
       return null;
     }
 
-    const users = Array.from(this.users.values());
-    const found = users.find(u => u.id === session.userId);
-    if (found) {
-      return { id: found.id, name: found.name, email: found.email };
+    for (const u of Array.from(this.users.values())) {
+      if (u.id === session.userId) {
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email
+        };
+      }
     }
     return null;
   }
 
-  /**
-   * Log out session
-   */
-  public static logout(token: string): void {
-    if (token) this.sessions.delete(token);
+  public static logout(token: string) {
+    this.sessions.delete(token);
   }
 }

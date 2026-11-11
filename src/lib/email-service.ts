@@ -50,13 +50,13 @@ export class EmailService {
           <tr>
             <td style="padding-bottom: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 24px;">
               <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #ffffff;">
-                Verify your email address
+                Email Verification Code
               </h3>
               <p style="margin: 0 0 8px 0; font-size: 14px; line-height: 1.6; color: #d1d5db;">
                 Hello <strong>${name}</strong>,
               </p>
               <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #9ca3af;">
-                Please use the following 6-digit one-time password (OTP) to complete your DeployX account registration:
+                Please use the following 6-digit verification code to complete your DeployX account registration:
               </p>
             </td>
           </tr>
@@ -64,7 +64,7 @@ export class EmailService {
           <!-- Big OTP Code Box -->
           <tr>
             <td align="center" style="padding: 16px 0 24px 0;">
-              <div style="background-color: #0d0d10; border: 1px solid #6366f1; border-radius: 16px; padding: 20px; letter-spacing: 12px; font-size: 32px; font-weight: 800; font-family: 'Courier New', Courier, monospace; color: #818cf8; text-align: center;">
+              <div style="background-color: #0d0d10; border: 1px solid #6366f1; border-radius: 16px; padding: 20px; letter-spacing: 12px; font-size: 34px; font-weight: 800; font-family: 'Courier New', Courier, monospace; color: #818cf8; text-align: center;">
                 ${otp}
               </div>
               <p style="margin: 12px 0 0 0; font-size: 12px; color: #ef4444; font-weight: 500;">
@@ -76,7 +76,7 @@ export class EmailService {
           <!-- Security Notice -->
           <tr>
             <td style="padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 12px; line-height: 1.5; color: #6b7280;">
-              If you didn't attempt to sign up for DeployX, you can safely disregard this email. Your email address remains secure.
+              If you did not request this verification code, please ignore this email. No changes will be made to your account.
             </td>
           </tr>
 
@@ -97,39 +97,48 @@ export class EmailService {
 
   /**
    * Main dispatch method trying configured services:
-   * 1. Direct Gmail / SMTP (Sends to ANY email address on Earth without domain requirements)
-   * 2. Resend API (Sends to verified domain or account owner email)
+   * 1. Direct Gmail SMTP via TLS (delivers to ANY recipient without domain verification)
+   * 2. Resend API (delivers to any recipient if custom domain is verified; or account owner if on sandbox)
    * 3. Brevo API
-   * 4. SendGrid API
    */
   public static async sendVerificationOTP(params: SendEmailParams): Promise<EmailDispatchResult> {
     const { toEmail, toName, otpCode } = params;
+    const cleanTo = toEmail.trim().toLowerCase();
     const html = this.getEmailHtml(toName, otpCode);
     const subject = `Your DeployX Verification Code: ${otpCode}`;
 
     let lastError = '';
 
-    // 1. Try Direct Gmail / SMTP via Pure Node.js TLS (Sends to ANY recipient without domain verification!)
+    // 1. Try Direct Gmail / SMTP via Pure Node.js TLS (Sends to ANY recipient without custom domain requirements)
     const smtpUser = process.env.EMAIL_USER || process.env.SMTP_USER || process.env.GMAIL_USER;
     const smtpPass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
     const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
     const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465;
 
+    // Validate if EMAIL_USER is a valid email string
+    const isValidEmail = (str?: string) => Boolean(str && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str.trim()));
+
     if (smtpUser && smtpPass) {
-      try {
-        const smtpResult = await SmtpClient.sendMail(
-          { user: smtpUser, pass: smtpPass, host: smtpHost, port: smtpPort },
-          { to: toEmail, fromName: 'DeployX Security', subject, html }
-        );
-        if (smtpResult.success) {
-          return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
-        } else {
-          lastError = `Gmail SMTP error: ${smtpResult.error}`;
-          console.warn('Gmail SMTP failed:', smtpResult.error);
+      if (!isValidEmail(smtpUser)) {
+        const warn = `EMAIL_USER must be a full email address (e.g. yourname@gmail.com). Current value: "${smtpUser}".`;
+        console.warn(`[DeployX Email] ${warn}`);
+        lastError = warn;
+      } else {
+        try {
+          const smtpResult = await SmtpClient.sendMail(
+            { user: smtpUser, pass: smtpPass, host: smtpHost, port: smtpPort },
+            { to: cleanTo, fromName: 'DeployX Verification', subject, html }
+          );
+          if (smtpResult.success) {
+            return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
+          } else {
+            lastError = `Gmail SMTP error: ${smtpResult.error}`;
+            console.warn('[DeployX Email] Gmail SMTP failed:', smtpResult.error);
+          }
+        } catch (err: any) {
+          lastError = `SMTP error: ${err.message}`;
+          console.warn('[DeployX Email] SMTP dispatch exception:', err.message);
         }
-      } catch (err: any) {
-        lastError = `SMTP error: ${err.message}`;
-        console.warn('SMTP dispatch exception:', err.message);
       }
     }
 
@@ -137,7 +146,7 @@ export class EmailService {
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey && !resendKey.includes('placeholder')) {
       try {
-        const fromEmail = process.env.EMAIL_FROM || 'DeployX <onboarding@resend.dev>';
+        const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'DeployX <onboarding@resend.dev>';
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -146,7 +155,7 @@ export class EmailService {
           },
           body: JSON.stringify({
             from: fromEmail,
-            to: [toEmail],
+            to: [cleanTo],
             subject,
             html
           })
@@ -156,8 +165,13 @@ export class EmailService {
           return { success: true, provider: 'Resend', serviceConfigured: true };
         } else {
           const errText = await res.text();
-          lastError = `Resend Notice: Free testing domain (onboarding@resend.dev) restricts delivery. (${errText})`;
-          console.warn('Resend dispatch error:', errText);
+          let parsedMsg = errText;
+          try {
+            const parsed = JSON.parse(errText);
+            parsedMsg = parsed.message || errText;
+          } catch {}
+          lastError = `Resend Notice: ${parsedMsg}`;
+          console.warn('[DeployX Email] Resend dispatch error:', errText);
         }
       } catch (err: any) {
         lastError = `Resend connection failed: ${err.message}`;
@@ -175,8 +189,8 @@ export class EmailService {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            sender: { name: 'DeployX', email: process.env.EMAIL_FROM || 'auth@deployx.dev' },
-            to: [{ email: toEmail, name: toName }],
+            sender: { name: 'DeployX', email: process.env.FROM_EMAIL || 'auth@deployx.dev' },
+            to: [{ email: cleanTo, name: toName }],
             subject,
             htmlContent: html
           })
@@ -190,36 +204,10 @@ export class EmailService {
       }
     }
 
-    // 4. Try SendGrid API
-    const sendgridKey = process.env.SENDGRID_API_KEY;
-    if (sendgridKey && !sendgridKey.includes('placeholder')) {
-      try {
-        const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${sendgridKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            personalizations: [{ to: [{ email: toEmail, name: toName }] }],
-            from: { email: process.env.EMAIL_FROM || 'auth@deployx.dev', name: 'DeployX' },
-            subject,
-            content: [{ type: 'text/html', value: html }]
-          })
-        });
-
-        if (res.ok || res.status === 202) {
-          return { success: true, provider: 'SendGrid', serviceConfigured: true };
-        }
-      } catch (err: any) {
-        lastError = `SendGrid error: ${err.message}`;
-      }
-    }
-
     return {
       success: false,
       error: lastError || 'No transactional email provider configured yet.',
-      serviceConfigured: Boolean(smtpUser || resendKey || brevoKey || sendgridKey)
+      serviceConfigured: Boolean((smtpUser && smtpPass) || resendKey || brevoKey)
     };
   }
 }

@@ -70,23 +70,26 @@ export class SmtpClient {
       socket.on('data', (chunk: Buffer) => {
         buffer += chunk.toString();
 
-        // RFC 5321: A complete SMTP response ends with a line starting with 3 digits and a SPACE (or no more lines)
-        // Multiline responses have a hyphen: "250-..." whereas the final line has a space: "250 ..."
+        // RFC 5321: Split buffer by CRLF to find completed lines
         const lines = buffer.split('\r\n');
         
-        // Find if the buffer contains a completed status line
         let completedCode: number | null = null;
         let completedMessage = '';
 
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          const match = line.match(/^(\d{3})\s(.*)$/);
+          const match = line.match(/^(\d{3})([ -])(.*)$/);
           if (match) {
-            completedCode = parseInt(match[1], 10);
-            completedMessage = buffer;
-            // Clear processed lines from buffer
-            buffer = lines.slice(i + 1).join('\r\n');
-            break;
+            const code = parseInt(match[1], 10);
+            const isFinalLine = match[2] === ' ' || match[2] === '\t';
+            
+            // If server returned an error (4xx or 5xx) or reached the final line of a multiline reply
+            if (code >= 400 || isFinalLine) {
+              completedCode = code;
+              completedMessage = buffer;
+              buffer = lines.slice(i + 1).join('\r\n');
+              break;
+            }
           }
         }
 
