@@ -10,6 +10,7 @@ export interface SmtpOptions {
 export interface SendMailParams {
   to: string;
   fromName?: string;
+  fromEmail?: string;
   subject: string;
   html: string;
 }
@@ -29,7 +30,7 @@ export class SmtpClient {
     const host = options.host || 'smtp.gmail.com';
     const port = options.port || 465;
     const { user, pass } = options;
-    const { to, fromName = 'DeployX Security', subject, html } = params;
+    const { to, fromName = 'DeployX Security', fromEmail, subject, html } = params;
 
     const cleanUser = user.trim();
     const cleanPass = pass.replace(/\s+/g, ''); // Strip any spaces from Google App Password
@@ -144,7 +145,7 @@ export class SmtpClient {
             // Expecting 235 Authentication successful
             if (code === 235) {
               step = 5;
-              send(`MAIL FROM:<${cleanUser}>`);
+              send(`MAIL FROM:<${fromEmail || cleanUser}>`);
             }
             break;
 
@@ -169,7 +170,7 @@ export class SmtpClient {
             if (code === 354) {
               step = 8;
               const emailPayload = [
-                `From: "${fromName}" <${cleanUser}>`,
+                `From: "${fromName}" <${fromEmail || cleanUser}>`,
                 `To: <${to.trim()}>`,
                 `Subject: ${subject}`,
                 'MIME-Version: 1.0',

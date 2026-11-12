@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AuthPortal } from '@/components/auth/AuthPortal';
+import { UnifiedAIChat } from '@/components/UnifiedAIChat';
 import { Project, ProjectFile, ChatMessage } from '@/lib/types';
 import { PreviewRuntime } from '@/lib/preview-runtime';
 
@@ -46,6 +47,7 @@ export default function ClaudeAppPage() {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
 
   // State
+  const [viewMode, setViewMode] = useState<'chat' | 'builder'>('chat');
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -261,6 +263,11 @@ export default function ClaudeAppPage() {
   // If not logged in:
   if (!user) {
     return <AuthPortal />;
+  }
+
+  // Unified Multi-Model AI Workspace (ChatGPT, Gemini, Claude)
+  if (viewMode === 'chat') {
+    return <UnifiedAIChat onSwitchToBuilder={() => setViewMode('builder')} />;
   }
 
   // Current HTML for Preview
@@ -487,6 +494,15 @@ export default function ClaudeAppPage() {
 
           {/* Right Header Status */}
           <div className="flex items-center space-x-3 text-xs">
+            <button
+              onClick={() => setViewMode('chat')}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-brand-600/20 transition-all"
+              title="Switch to Unified Multi-Model AI Chat (ChatGPT, Gemini, Claude)"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Multi-AI Hub</span>
+            </button>
+
             <span className="hidden sm:inline text-slate-400 text-xs">
               Free plan · <span className="text-white hover:underline cursor-pointer">Upgrade</span>
             </span>

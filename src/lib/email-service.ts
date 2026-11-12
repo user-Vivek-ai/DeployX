@@ -1,4 +1,5 @@
 import { SmtpClient } from './smtp-client';
+import { getSenderInfo } from './email-config';
 
 interface SendEmailParams {
   toEmail: string;
@@ -125,9 +126,10 @@ export class EmailService {
         lastError = warn;
       } else {
         try {
+          const { fromEmail, displayName } = getSenderInfo();
           const smtpResult = await SmtpClient.sendMail(
             { user: smtpUser, pass: smtpPass, host: smtpHost, port: smtpPort },
-            { to: cleanTo, fromName: 'DeployX Verification', subject, html }
+            { to: cleanTo, fromName: displayName, fromEmail, subject, html }
           );
           if (smtpResult.success) {
             return { success: true, provider: 'Gmail SMTP', serviceConfigured: true };
@@ -146,7 +148,7 @@ export class EmailService {
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey && !resendKey.includes('placeholder')) {
       try {
-        const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'DeployX <onboarding@resend.dev>';
+        const { fromEmail, displayName } = getSenderInfo();
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
