@@ -1,16 +1,15 @@
 import { AIProvider, ModelInfo, AIResponse, ChatMessage } from '@/lib/ai/provider';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export class GeminiProvider extends AIProvider {
-  private client: GoogleGenerativeAI;
+  private apiKey: string;
 
   constructor() {
     super();
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey || apiKey.includes('placeholder')) {
+    const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!key || key.includes('placeholder')) {
       throw new Error('GEMINI_API_KEY is not set');
     }
-    this.client = new GoogleGenerativeAI(apiKey);
+    this.apiKey = key;
   }
 
   async listModels(): Promise<ModelInfo[]> {
@@ -19,22 +18,22 @@ export class GeminiProvider extends AIProvider {
         provider: 'gemini',
         id: 'gemini-1.5-flash',
         name: 'Gemini 1.5 Flash',
-        description: 'Fast, highly capable, free-tier friendly model',
-        capabilities: ['text', 'multimodal']
+        description: 'Google’s ultra-fast, cost-effective multimodal model with generous free tier',
+        capabilities: ['text', 'multimodal', 'speed']
       },
       {
         provider: 'gemini',
         id: 'gemini-1.5-pro',
         name: 'Gemini 1.5 Pro',
-        description: 'Advanced reasoning and long-context multimodal intelligence',
-        capabilities: ['text', 'multimodal', 'complex-reasoning']
+        description: 'Google’s top-tier model with 1M+ context and deep multimodal reasoning',
+        capabilities: ['text', 'multimodal', 'long-context']
       },
       {
         provider: 'gemini',
         id: 'gemini-2.0-flash',
         name: 'Gemini 2.0 Flash',
-        description: 'Next-generation speed and multimodal capabilities',
-        capabilities: ['text', 'multimodal']
+        description: 'Next-generation speed and real-time multimodal capabilities',
+        capabilities: ['text', 'speed']
       }
     ];
   }
@@ -44,48 +43,55 @@ export class GeminiProvider extends AIProvider {
     options?: { model?: string; stream?: boolean }
   ): Promise<AIResponse | AsyncIterable<AIResponse>> {
     const modelId = options?.model || 'gemini-1.5-flash';
-    
+
     // Separate system messages if present
     const systemInstruction = messages
       .filter(m => m.role === 'system')
       .map(m => m.content)
       .join('\n\n');
 
-    const model = this.client.getGenerativeModel({
-      model: modelId,
-      ...(systemInstruction ? { systemInstruction } : {})
-    });
-
-    // Format contents: Gemini requires alternating 'user' and 'model'
-    // Ensure role is mapped properly: 'assistant' -> 'model'
-    const nonSystemMessages = messages.filter(m => m.role !== 'system');
-    
-    // Ensure at least one message
-    if (nonSystemMessages.length === 0) {
+    // Gemini contents format
+    const nonSystem = messages.filter(m => m.role !== 'system');
+    if (nonSystem.length === 0) {
       throw new Error('No messages provided to Gemini');
     }
 
-    const contents = nonSystemMessages.map(m => ({
+    const contents = nonSystem.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
 
-    if (options?.stream) {
-      const streamResult = await model.generateContentStream({ contents: contents as any });
-      const asyncIter = (async function* () {
-        for await (const chunk of streamResult.stream) {
-          const chunkText = chunk.text();
-          if (chunkText) {
-            yield { role: 'assistant', content: chunkText } as AIResponse;
-          }
-        }
-      })();
-      return asyncIter;
+    const payload: any = { contents };
+    if (systemInstruction) {
+      payload.systemInstruction = {
+        parts: [{ text: systemInstruction }]
+      };
     }
 
-    const result = await model.generateContent({ contents: contents as any });
-    const text = result.response?.text() || '';
-    const usage = result.response?.usageMetadata?.totalTokenCount;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${this.apiKey}`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let parsedMsg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMsg = parsed.error?.message || errText;
+      } catch {}
+      throw new Error(`Google Gemini API error (${res.status}): ${parsedMsg}`);
+    }
+
+    const data = await res.json();
+    const candidate = data.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text || '';
+    const usage = data.usageMetadata?.totalTokenCount;
 
     return {
       role: 'assistant',

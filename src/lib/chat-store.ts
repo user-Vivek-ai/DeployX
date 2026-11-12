@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 export interface Message {
   id: string;
@@ -22,12 +22,6 @@ export interface Conversation {
   messages: Message[];
 }
 
-/**
- * Simple file‑based store that lives in the OS temporary directory.
- * This works fine with Vercel serverless functions because the /tmp folder
- * persists for the lifetime of the container (across requests within the same
- * deployment). For production you would replace this with a proper DB.
- */
 const STORE_PATH = path.join(os.tmpdir(), 'deployx_chat_store.json');
 
 let store: Record<string, Conversation> = {};
@@ -47,7 +41,7 @@ function saveStore() {
   try {
     fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
   } catch {
-    // ignore – serverless may be read‑only for some deployments
+    // ignore
   }
 }
 
@@ -58,7 +52,7 @@ export class ChatStore {
   static createConversation(userId: string, provider: string, model: string, title = 'New Conversation'): Conversation {
     const now = new Date().toISOString();
     const convo: Conversation = {
-      id: uuidv4(),
+      id: crypto.randomUUID ? crypto.randomUUID() : `convo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       userId,
       title,
       provider,
@@ -77,7 +71,9 @@ export class ChatStore {
   }
 
   static listUserConversations(userId: string): Conversation[] {
-    return Object.values(store).filter(c => c.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return Object.values(store)
+      .filter(c => c.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   static deleteConversation(id: string): boolean {
@@ -104,7 +100,7 @@ export class ChatStore {
     const convo = store[convoId];
     if (!convo) return null;
     const msg: Message = {
-      id: uuidv4(),
+      id: crypto.randomUUID ? crypto.randomUUID() : `msg_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       role,
       content,
       createdAt: new Date().toISOString(),

@@ -1,16 +1,15 @@
 import { AIProvider, ModelInfo, AIResponse, ChatMessage } from '@/lib/ai/provider';
-import Anthropic from '@anthropic-ai/sdk';
 
 export class AnthropicProvider extends AIProvider {
-  private client: Anthropic;
+  private apiKey: string;
 
   constructor() {
     super();
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey.includes('placeholder')) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key || key.includes('placeholder')) {
       throw new Error('ANTHROPIC_API_KEY is not set');
     }
-    this.client = new Anthropic({ apiKey });
+    this.apiKey = key;
   }
 
   async listModels(): Promise<ModelInfo[]> {
@@ -19,22 +18,22 @@ export class AnthropicProvider extends AIProvider {
         provider: 'anthropic',
         id: 'claude-3-5-sonnet-20241022',
         name: 'Claude 3.5 Sonnet',
-        description: 'Industry-leading intelligence, coding, and nuanced reasoning',
-        capabilities: ['text', 'vision', 'complex-reasoning']
+        description: 'Anthropic’s smartest model — state-of-the-art coding and reasoning',
+        capabilities: ['text', 'coding', 'reasoning']
       },
       {
         provider: 'anthropic',
         id: 'claude-3-5-haiku-20241022',
         name: 'Claude 3.5 Haiku',
-        description: 'Blazing fast intelligence with near-instant responsiveness',
+        description: 'Instant response time with unmatched speed and concise answers',
         capabilities: ['text', 'speed']
       },
       {
         provider: 'anthropic',
         id: 'claude-3-opus-20240229',
         name: 'Claude 3 Opus',
-        description: 'Deep analytical power for complex open-ended problems',
-        capabilities: ['text', 'vision', 'deep-analysis']
+        description: 'Powerhouse intelligence for long-form analysis and creative writing',
+        capabilities: ['text', 'deep-thinking']
       }
     ];
   }
@@ -44,15 +43,14 @@ export class AnthropicProvider extends AIProvider {
     options?: { model?: string; stream?: boolean }
   ): Promise<AIResponse | AsyncIterable<AIResponse>> {
     const model = options?.model || 'claude-3-5-sonnet-20241022';
-    const stream = options?.stream ?? false;
 
-    // Extract system prompt separately (Anthropic requires system as top-level param)
+    // Separate system messages
     const systemPrompt = messages
       .filter(m => m.role === 'system')
       .map(m => m.content)
       .join('\n\n');
 
-    // Only pass user and assistant roles to Anthropic
+    // Only pass user and assistant roles
     const chatMessages = messages
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({
@@ -64,41 +62,47 @@ export class AnthropicProvider extends AIProvider {
       throw new Error('No user or assistant messages provided to Anthropic');
     }
 
-    if (stream) {
-      const streamResp = await this.client.messages.stream({
-        model,
-        max_tokens: 4096,
-        ...(systemPrompt ? { system: systemPrompt } : {}),
-        messages: chatMessages
-      });
+    const payload: any = {
+      model,
+      max_tokens: 4096,
+      messages: chatMessages
+    };
 
-      const asyncIter = (async function* () {
-        for await (const chunk of streamResp) {
-          if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-            yield { role: 'assistant', content: chunk.delta.text } as AIResponse;
-          }
-        }
-      })();
-      return asyncIter;
-    } else {
-      const resp = await this.client.messages.create({
-        model,
-        max_tokens: 4096,
-        ...(systemPrompt ? { system: systemPrompt } : {}),
-        messages: chatMessages
-      });
-
-      const text = resp.content
-        .filter(c => c.type === 'text')
-        .map(c => (c as any).text)
-        .join('');
-      const usage = (resp.usage?.input_tokens || 0) + (resp.usage?.output_tokens || 0);
-
-      return {
-        role: 'assistant',
-        content: text,
-        usageTokens: usage
-      };
+    if (systemPrompt) {
+      payload.system = systemPrompt;
     }
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let parsedMsg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMsg = parsed.error?.message || errText;
+      } catch {}
+      throw new Error(`Anthropic Claude API error (${res.status}): ${parsedMsg}`);
+    }
+
+    const data = await res.json();
+    const text = (data.content || [])
+      .filter((c: any) => c.type === 'text')
+      .map((c: any) => c.text)
+      .join('');
+    const usage = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
+
+    return {
+      role: 'assistant',
+      content: text,
+      usageTokens: usage
+    };
   }
 }
