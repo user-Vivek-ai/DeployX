@@ -2,15 +2,20 @@
 
 import React, { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { DocumentCard } from '@/components/DocumentCard';
 
 interface MarkdownRendererProps {
   content: string;
 }
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
-  // Parse content into blocks: code blocks (```) and text paragraphs
+  // First, check for :::document or :::website blocks
   const parts: React.ReactNode[] = [];
   const lines = content.split('\n');
+
+  let inSpecialBlock = false;
+  let specialBlockType = '';
+  let specialBuffer: string[] = [];
 
   let inCodeBlock = false;
   let codeLanguage = '';
@@ -22,12 +27,10 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     const textContent = textBuffer.join('\n');
     textBuffer = [];
 
-    // Split paragraphs by double newlines
     const paragraphs = textContent.split(/\n\n+/);
     paragraphs.forEach((para, pIdx) => {
       if (!para.trim()) return;
 
-      // Check if it's a heading
       if (para.startsWith('### ')) {
         parts.push(
           <h3 key={`h3-${parts.length}-${pIdx}`} className="text-base font-bold text-white mt-3 mb-1.5">
@@ -53,13 +56,12 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         return;
       }
 
-      // Check if it's a bulleted list
       const linesInPara = para.split('\n');
       const isList = linesInPara.every(l => /^\s*([-*]|\d+\.)\s+/.test(l));
 
       if (isList) {
         parts.push(
-          <ul key={`ul-${parts.length}-${pIdx}`} className="space-y-1.5 my-2 pl-4 list-disc marker:text-indigo-400">
+          <ul key={`ul-${parts.length}-${pIdx}`} className="space-y-1.5 my-2 pl-4 list-disc marker:text-brand-400">
             {linesInPara.map((line, lIdx) => (
               <li key={lIdx} className="text-slate-200 text-xs sm:text-[13px] leading-relaxed">
                 {renderInlineMarkdown(line.replace(/^\s*([-*]|\d+\.)\s+/, ''))}
@@ -70,17 +72,15 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         return;
       }
 
-      // Check if it's a blockquote
       if (para.startsWith('> ')) {
         parts.push(
-          <blockquote key={`bq-${parts.length}-${pIdx}`} className="border-l-4 border-indigo-500 pl-3 my-2 text-slate-300 italic text-xs sm:text-[13px]">
+          <blockquote key={`bq-${parts.length}-${pIdx}`} className="border-l-4 border-brand-500 pl-3 my-2 text-slate-300 italic text-xs sm:text-[13px]">
             {renderInlineMarkdown(para.replace(/^>\s+/, ''))}
           </blockquote>
         );
         return;
       }
 
-      // Normal paragraph
       parts.push(
         <p key={`p-${parts.length}-${pIdx}`} className="text-slate-200 text-xs sm:text-[13px] leading-relaxed my-1.5 whitespace-pre-wrap">
           {renderInlineMarkdown(para)}
@@ -92,9 +92,42 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
+    // Detect special artifact blocks: :::document or :::website
+    if (line.trim().startsWith(':::document') || line.trim().startsWith(':::website')) {
+      flushTextBuffer();
+      inSpecialBlock = true;
+      specialBlockType = line.trim().startsWith(':::document') ? 'document' : 'website';
+      specialBuffer = [];
+      continue;
+    }
+
+    if (inSpecialBlock) {
+      if (line.trim() === ':::') {
+        inSpecialBlock = false;
+        try {
+          const rawJson = specialBuffer.join('\n');
+          const parsed = JSON.parse(rawJson);
+          const docType = specialBlockType === 'website' ? 'website' : (parsed.type || 'pptx');
+          parts.push(
+            <DocumentCard
+              key={`doc-${parts.length}`}
+              type={docType}
+              data={parsed}
+            />
+          );
+        } catch (e) {
+          console.warn('Could not parse document artifact JSON:', e);
+        }
+        specialBuffer = [];
+      } else {
+        specialBuffer.push(line);
+      }
+      continue;
+    }
+
+    // Normal code blocks
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        // Closing code block
         const codeText = codeBuffer.join('\n');
         parts.push(
           <CodeBlock
@@ -107,7 +140,6 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         codeLanguage = '';
         inCodeBlock = false;
       } else {
-        // Opening code block
         flushTextBuffer();
         codeLanguage = line.replace(/^```/, '').trim();
         inCodeBlock = true;
@@ -119,7 +151,6 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     }
   }
 
-  // Flush remaining
   if (inCodeBlock && codeBuffer.length > 0) {
     parts.push(
       <CodeBlock
@@ -145,8 +176,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   };
 
   return (
-    <div className="my-3 rounded-xl overflow-hidden bg-[#121212] border border-white/10 shadow-lg text-xs font-mono">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#1b1b1b] border-b border-white/5 text-[11px] text-slate-400">
+    <div className="my-3 rounded-xl overflow-hidden bg-[#141414] border border-white/10 shadow-lg text-xs font-mono">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#1e1e1e] border-b border-white/5 text-[11px] text-slate-400">
         <span className="font-semibold uppercase tracking-wider text-slate-300">{language}</span>
         <button
           onClick={handleCopy}
@@ -161,7 +192,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           ) : (
             <>
               <Copy className="w-3.5 h-3.5" />
-              <span>Copy</span>
+              <span>Copy code</span>
             </>
           )}
         </button>
@@ -174,7 +205,6 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 }
 
 function renderInlineMarkdown(text: string): React.ReactNode[] {
-  // Regex pattern for bold (**text**), inline code (`code`), italic (*text*), and links ([text](url))
   const parts: React.ReactNode[] = [];
   const regex = /(\*\*.*?\*\*|`.*?`|\*.*?\*|\[.*?\]\(.*?\))/g;
   let lastIdx = 0;

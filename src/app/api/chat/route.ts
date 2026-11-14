@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { AuthStore } from '@/lib/auth-store';
 import { ChatStore } from '@/lib/chat-store';
-import { AIProviderFactory } from '@/lib/ai/factory';
+import { AnthropicProvider } from '@/lib/ai/anthropic';
+import { GeminiProvider } from '@/lib/ai/gemini';
+import { DEPLOYX_SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 
-// Simple in-memory per-user rate limiter
+// In-memory per-user rate limiter
 const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT = 20; // max requests per minute
+const RATE_LIMIT = 25; // max 25 req/min
 const RATE_WINDOW = 60_000;
 
 function checkRateLimit(userId: string): boolean {
@@ -35,31 +37,20 @@ export async function POST(req: Request) {
   try {
     const user = getUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Please log in to use AI chat.' }, { status: 401 });
+      return NextResponse.json({ error: 'Please sign in to access your chat history.' }, { status: 401 });
     }
 
     if (!checkRateLimit(user.id)) {
-      return NextResponse.json({ error: 'Rate limit exceeded. Please wait a moment before sending more messages.' }, { status: 429 });
+      return NextResponse.json({
+        error: 'Rate limit reached. Please wait a few seconds before sending another message.'
+      }, { status: 429 });
     }
 
     const body = await req.json();
-    const { conversationId, message, provider, model } = body;
+    const { conversationId, message, attachments } = body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
-    }
-
-    if (message.length > 32000) {
-      return NextResponse.json({ error: 'Message too long (max 32,000 characters).' }, { status: 400 });
-    }
-
-    const providerName = provider || 'openai';
-    const modelId = model || '';
-
-    // Validate provider
-    const validProviders = ['openai', 'gemini', 'anthropic'];
-    if (!validProviders.includes(providerName)) {
-      return NextResponse.json({ error: `Unsupported provider: ${providerName}` }, { status: 400 });
+      return NextResponse.json({ error: 'Message cannot be empty.' }, { status: 400 });
     }
 
     // Get or create conversation
@@ -70,89 +61,96 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
       }
     } else {
-      // Auto-create a new conversation
-      const title = message.slice(0, 50).trim() || 'New Chat';
-      convo = ChatStore.createConversation(user.id, providerName, modelId, title);
+      const title = message.slice(0, 48).trim() || 'New conversation';
+      convo = ChatStore.createConversation(user.id, 'claude', 'claude-3-5-sonnet-20241022', title);
     }
 
-    // Save user message
+    // Append attachments context if provided
+    let fullUserContent = message.trim();
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      const attachmentSummaries = attachments
+        .map((a: { name: string; content?: string }) => `\n[Attached File: "${a.name}"]:\n${a.content || '(binary / image content)'}`)
+        .join('\n\n');
+      fullUserContent += `\n\n--- User Attachments ---${attachmentSummaries}`;
+    }
+
+    // Save user message to persistent history
     ChatStore.addMessage(convo.id, 'user', message.trim());
 
-    // Build messages array for context
-    const contextMessages = convo.messages.map(m => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content
-    }));
+    // Build context history with system prompt
+    const contextMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+      { role: 'system', content: DEPLOYX_SYSTEM_PROMPT }
+    ];
 
-    // Call AI provider
-    let aiProvider;
-    try {
-      aiProvider = AIProviderFactory.getProvider(providerName);
-    } catch (err: any) {
-      const envVarMap: Record<string, string> = {
-        openai: 'OPENAI_API_KEY',
-        gemini: 'GEMINI_API_KEY',
-        anthropic: 'ANTHROPIC_API_KEY'
-      };
-      const envVar = envVarMap[providerName] || '';
+    // Add prior conversation turns
+    convo.messages.forEach((m, idx) => {
+      // For the last message, use the one with attachments if applicable
+      const isLast = idx === convo.messages.length - 1 && m.role === 'user';
+      contextMessages.push({
+        role: m.role,
+        content: isLast ? fullUserContent : m.content
+      });
+    });
+
+    let assistantContent = '';
+    let providerUsed = 'claude';
+
+    // 1. Try Anthropic Claude if ANTHROPIC_API_KEY is configured
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey && !anthropicKey.includes('placeholder')) {
+      try {
+        const claude = new AnthropicProvider();
+        const response = await claude.sendMessage(contextMessages, {
+          model: 'claude-3-5-sonnet-20241022'
+        });
+        const resObj = response as { role: string; content: string; usageTokens?: number };
+        assistantContent = (resObj.content || '').trim();
+        providerUsed = 'claude';
+      } catch (claudeErr: any) {
+        console.warn('Anthropic call encountered error, checking fallback:', claudeErr.message);
+      }
+    }
+
+    // 2. If Anthropic wasn't configured or failed, fallback to Google Gemini (which is already configured in Vercel!)
+    if (!assistantContent) {
+      const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (geminiKey && !geminiKey.includes('placeholder')) {
+        try {
+          const gemini = new GeminiProvider();
+          const response = await gemini.sendMessage(contextMessages, {
+            model: 'gemini-1.5-flash'
+          });
+          const resObj = response as { role: string; content: string; usageTokens?: number };
+          assistantContent = (resObj.content || '').trim();
+          providerUsed = 'gemini';
+        } catch (geminiErr: any) {
+          throw new Error(`AI Provider Error: ${geminiErr.message}`);
+        }
+      }
+    }
+
+    if (!assistantContent) {
       return NextResponse.json({
-        error: `${providerName.charAt(0).toUpperCase() + providerName.slice(1)} API key is not configured. Please set the ${envVar} environment variable in your Vercel project settings.`,
-        configError: true,
-        envVar
+        error: 'AI is currently unavailable: No active API key found for Claude (ANTHROPIC_API_KEY) or Gemini (GEMINI_API_KEY) in Vercel settings. Please configure an API key to enable responses.'
       }, { status: 503 });
     }
 
-    try {
-      const selectedModel = modelId || undefined;
-      const response = await aiProvider.sendMessage(contextMessages, { model: selectedModel });
+    // Save assistant message to persistent store
+    ChatStore.addMessage(convo.id, 'assistant', assistantContent);
 
-      // Handle non-streaming response
-      const aiResponse = response as { role: string; content: string; usageTokens?: number };
-      const assistantContent = aiResponse.content || '';
-      const usage = aiResponse.usageTokens;
-
-      // Save assistant message
-      ChatStore.addMessage(convo.id, 'assistant', assistantContent, usage);
-
-      // Auto-title: if this is the first exchange, update title from user message
-      if (convo.messages.length <= 2) {
-        const autoTitle = message.slice(0, 60).trim();
-        ChatStore.renameConversation(convo.id, autoTitle);
-        convo.title = autoTitle;
-      }
-
-      return NextResponse.json({
-        conversationId: convo.id,
-        response: assistantContent,
-        usage,
-        title: convo.title
-      });
-
-    } catch (apiError: any) {
-      const errorMsg = apiError.message || 'AI provider returned an error.';
-      
-      // Detect common error patterns
-      if (errorMsg.includes('401') || errorMsg.includes('Unauthorized') || errorMsg.includes('Invalid API')) {
-        return NextResponse.json({
-          error: `Invalid API key for ${providerName}. Please check your API key configuration.`,
-          configError: true
-        }, { status: 401 });
-      }
-
-      if (errorMsg.includes('429') || errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
-        return NextResponse.json({
-          error: `API rate limit or quota exceeded for ${providerName}. Your free tier credits may have been used up. Please check your provider billing dashboard.`
-        }, { status: 429 });
-      }
-
-      if (errorMsg.includes('insufficient') || errorMsg.includes('billing') || errorMsg.includes('credit')) {
-        return NextResponse.json({
-          error: `Insufficient API credits for ${providerName}. Please add credits to your provider account.`
-        }, { status: 402 });
-      }
-
-      return NextResponse.json({ error: errorMsg }, { status: 500 });
+    // Auto-title on first turn
+    if (convo.messages.length <= 2) {
+      const autoTitle = message.slice(0, 48).trim();
+      ChatStore.renameConversation(convo.id, autoTitle);
+      convo.title = autoTitle;
     }
+
+    return NextResponse.json({
+      conversationId: convo.id,
+      response: assistantContent,
+      title: convo.title,
+      provider: providerUsed
+    });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
