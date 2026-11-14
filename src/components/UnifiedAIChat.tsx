@@ -22,10 +22,6 @@ import {
   User as UserIcon,
   Sun,
   Moon,
-  Presentation,
-  Globe,
-  Table,
-  FileText,
   Square,
   Search
 } from 'lucide-react';
@@ -552,73 +548,19 @@ export function UnifiedAIChat({ onSwitchToBuilder }: UnifiedAIChatProps) {
         </header>
 
         {/* ========================================================================= */}
-        {/* VIEW A: CLAUDE-INSPIRED WELCOME SCREEN (When Conversation is Empty) */}
+        {/* VIEW A: CLAUDE-INSPIRED CLEAN WELCOME SCREEN                             */}
         {/* ========================================================================= */}
         {activeMessages.length === 0 ? (
-          <div className="flex-grow flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <div className="max-w-xl w-full space-y-6 text-center">
-              {/* Friendly Claude-Style Greeting */}
-              <div className="space-y-2">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-brand-600/30 mx-auto">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <h1 className={`text-2xl sm:text-3xl font-serif tracking-tight ${
-                  isLight ? 'text-slate-900' : 'text-white'
-                }`}>
-                  {getGreeting()}, <span className="italic">{firstName}</span>
-                </h1>
-                <p className={`text-xs sm:text-sm max-w-md mx-auto leading-relaxed ${
-                  isLight ? 'text-slate-600' : 'text-slate-400'
-                }`}>
-                  What would you like DeployX to generate or explore today?
-                </p>
+          <div className="flex-grow flex flex-col items-center justify-center p-4 sm:p-6 select-none">
+            <div className="max-w-xl w-full text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/20 mx-auto">
+                <Sparkles className="w-6 h-6" />
               </div>
-
-              {/* Starter Action Cards (PPTX, DOCX, XLSX, Web App) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left pt-2">
-                {[
-                  {
-                    icon: <Presentation className="w-4 h-4 text-amber-500" />,
-                    title: 'PowerPoint Presentation',
-                    desc: 'Create an authentic 10-slide PPTX deck on Artificial Intelligence.',
-                    prompt: 'Create a professional PowerPoint presentation about Artificial Intelligence with 10 slides, complete with title, key takeaways, and structured slide contents.'
-                  },
-                  {
-                    icon: <Globe className="w-4 h-4 text-indigo-500" />,
-                    title: 'Interactive Website',
-                    desc: 'Generate a modern portfolio or SaaS landing page with live preview.',
-                    prompt: 'Build a modern, responsive personal portfolio website with a dark theme hero, projects showcase, skills grid, and an interactive contact form.'
-                  },
-                  {
-                    icon: <Table className="w-4 h-4 text-emerald-500" />,
-                    title: 'Excel Financial Model',
-                    desc: 'Generate a downloadable spreadsheet with revenue and churn formulas.',
-                    prompt: 'Create a comprehensive Excel spreadsheet for a 2026 SaaS financial model with quarterly revenue projections, customer acquisition cost, and gross margins.'
-                  },
-                  {
-                    icon: <FileText className="w-4 h-4 text-blue-500" />,
-                    title: 'Professional Document',
-                    desc: 'Synthesize an executive whitepaper or technical architecture report.',
-                    prompt: 'Create a professional Word document (.docx) providing a comprehensive architecture overview of modern autonomous agentic AI software systems.'
-                  }
-                ].map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(item.prompt)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-[0.99] space-y-1 ${
-                      isLight
-                        ? 'bg-white hover:bg-[#F3F1EB] border-[#E5E1D8] shadow-sm shadow-slate-200/50'
-                        : 'bg-[#242424] hover:bg-[#2b2b2b] border-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      {item.icon}
-                      <p className={`text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{item.title}</p>
-                    </div>
-                    <p className={`text-[11px] leading-tight ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{item.desc}</p>
-                  </button>
-                ))}
-              </div>
+              <h1 className={`text-3xl sm:text-4xl font-serif tracking-tight ${
+                isLight ? 'text-slate-900' : 'text-white'
+              }`}>
+                {getGreeting()}, <span className="italic">{firstName}</span>
+              </h1>
             </div>
           </div>
         ) : (

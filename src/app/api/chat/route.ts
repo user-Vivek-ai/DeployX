@@ -118,7 +118,7 @@ export async function POST(req: Request) {
         try {
           const gemini = new GeminiProvider();
           const response = await gemini.sendMessage(contextMessages, {
-            model: 'gemini-1.5-flash'
+            model: 'gemini-1.5-flash-latest'
           });
           const resObj = response as { role: string; content: string; usageTokens?: number };
           assistantContent = (resObj.content || '').trim();

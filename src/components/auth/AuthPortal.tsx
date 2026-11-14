@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles,
   Lock,
   Mail,
   User,
@@ -12,8 +11,7 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  Check,
-  RotateCw
+  Check
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -41,12 +39,12 @@ export function AuthPortal() {
   const [timerSeconds, setTimerSeconds] = useState(300); // 5-minute expiration
   const [resendCooldown, setResendCooldown] = useState(0); // 60-second cooldown
 
-  // 3D Cursor Movement State
+  // 3D Tilt & Cursor Physics State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Track 3D cursor movement across the viewport
+  // Smooth 3D Cursor Movement Tracker
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const { clientX, clientY } = e;
@@ -57,8 +55,8 @@ export function AuthPortal() {
 
       setMousePos({ x: clientX, y: clientY });
       setTilt({
-        x: normY * -9,
-        y: normX * 9
+        x: normY * -12,
+        y: normX * 12
       });
     };
 
@@ -262,7 +260,6 @@ export function AuthPortal() {
       }
 
       setSuccessMsg('✓ Account created successfully! Logging in...');
-      // Automatic login
       const loginRes = await login(email.trim().toLowerCase(), password);
       if (loginRes.success) {
         setTimeout(() => {
@@ -278,7 +275,7 @@ export function AuthPortal() {
     }
   };
 
-  // Login: Just Email + Password (as requested)
+  // Login: Just Email + Password
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -295,7 +292,7 @@ export function AuthPortal() {
       if (!result.success) {
         setErrorMsg(result.error || 'Invalid email or password.');
       } else {
-        setSuccessMsg('✓ Sign in successful! Loading workspace...');
+        setSuccessMsg('✓ Sign in successful! Entering workspace...');
       }
     } catch {
       setErrorMsg('Network error during sign in.');
@@ -311,69 +308,129 @@ export function AuthPortal() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-[#0d0d0d] text-slate-100 flex items-center justify-center p-3 sm:p-6 overflow-x-hidden select-none font-sans">
-      {/* Interactive 3D Cursor Lighting Canvas & Radial Glow */}
+    <div className="relative min-h-screen w-full bg-[#05070d] text-slate-100 flex items-center justify-center p-3 sm:p-6 overflow-hidden select-none font-sans">
+      {/* ========================================================================= */}
+      {/* 1. DYNAMIC NEON 3D BACKGROUND MATRIX & CURSOR LIGHTING                    */}
+      {/* ========================================================================= */}
+
+      {/* Dynamic Cursor Neon Lighting Sphere */}
       <div
         className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
         style={{
-          background: `radial-gradient(900px circle at ${mousePos.x}px ${mousePos.y}px, rgba(99, 102, 241, 0.15), rgba(16, 185, 129, 0.04) 40%, transparent 70%)`
+          background: `
+            radial-gradient(700px circle at ${mousePos.x}px ${mousePos.y}px, rgba(0, 240, 255, 0.18), transparent 60%),
+            radial-gradient(900px circle at ${mousePos.x * 0.8}px ${mousePos.y * 0.8}px, rgba(168, 85, 247, 0.14), transparent 70%)
+          `
         }}
       />
 
-      {/* 3D Floating Geometry Wireframe Background Grid */}
+      {/* Cybernetic 3D Perspective Grid with dynamic tilt */}
       <div
-        className="pointer-events-none fixed inset-0 z-0 opacity-20 transition-transform duration-300 ease-out"
+        className="pointer-events-none fixed inset-0 z-0 opacity-25 transition-transform duration-300 ease-out"
         style={{
           backgroundImage: `
-            linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)
+            linear-gradient(to right, rgba(0, 240, 255, 0.12) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(168, 85, 247, 0.12) 1px, transparent 1px)
           `,
-          backgroundSize: '48px 48px',
-          transform: `perspective(1000px) rotateX(${tilt.x * 0.4}deg) rotateY(${tilt.y * 0.4}deg) scale(1.05)`
+          backgroundSize: '56px 56px',
+          transform: `perspective(900px) rotateX(${tilt.x * 0.5 + 15}deg) rotateY(${tilt.y * 0.5}deg) scale(1.15)`
         }}
       />
 
-      {/* Floating 3D Ambient Orbs */}
+      {/* Floating Neon Orbital Glow Orbs */}
       <div
-        className="pointer-events-none absolute w-96 h-96 rounded-full bg-indigo-600/10 blur-3xl -top-20 -left-20 animate-pulse-subtle"
-        style={{ transform: `translate(${mousePos.x * 0.02}px, ${mousePos.y * 0.02}px)` }}
+        className="pointer-events-none absolute w-[500px] h-[500px] rounded-full blur-[120px] -top-32 -left-32 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, rgba(99, 102, 241, 0.15) 50%, transparent 80%)',
+          transform: `translate(${mousePos.x * 0.03}px, ${mousePos.y * 0.03}px)`
+        }}
       />
       <div
-        className="pointer-events-none absolute w-96 h-96 rounded-full bg-brand-600/10 blur-3xl -bottom-20 -right-20 animate-pulse-subtle"
-        style={{ transform: `translate(${mousePos.x * -0.02}px, ${mousePos.y * -0.02}px)` }}
+        className="pointer-events-none absolute w-[520px] h-[520px] rounded-full blur-[130px] -bottom-32 -right-32 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(217, 70, 239, 0.25) 0%, rgba(168, 85, 247, 0.15) 50%, transparent 80%)',
+          transform: `translate(${mousePos.x * -0.03}px, ${mousePos.y * -0.03}px)`
+        }}
+      />
+      <div
+        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full blur-[100px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{
+          background: 'radial-gradient(circle, rgba(0, 255, 157, 0.12) 0%, transparent 70%)',
+        }}
       />
 
-      {/* Main 3D Interactive Auth Container */}
+      {/* Floating 3D Geometric Cyber Wireframe Particles */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute top-1/4 left-10 w-2 h-2 rounded-full bg-[#00f0ff] shadow-[0_0_12px_#00f0ff] animate-ping"
+          style={{ animationDuration: '3s' }}
+        />
+        <div
+          className="absolute top-3/4 right-16 w-2.5 h-2.5 rounded-full bg-[#d946ef] shadow-[0_0_15px_#d946ef] animate-pulse"
+          style={{ animationDuration: '4s' }}
+        />
+        <div
+          className="absolute top-1/3 right-1/4 w-1.5 h-1.5 rounded-full bg-[#00ff9d] shadow-[0_0_10px_#00ff9d] animate-ping"
+          style={{ animationDuration: '5s' }}
+        />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. MAIN 3D HOLOGRAPHIC NEON CARD                                          */}
+      {/* ========================================================================= */}
       <div
         ref={cardRef}
         style={{
-          transform: `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
-          transformStyle: 'preserve-3d'
+          transform: `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale3d(1.01, 1.01, 1.01)`,
+          transformStyle: 'preserve-3d',
+          boxShadow: `
+            0 0 35px rgba(0, 240, 255, 0.22),
+            0 0 70px rgba(168, 85, 247, 0.18),
+            0 25px 60px rgba(0, 0, 0, 0.9),
+            inset 0 1px 1px rgba(255, 255, 255, 0.2)
+          `
         }}
-        className="relative z-10 w-full max-w-md bg-[#171717] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 backdrop-blur-xl transition-transform duration-200 ease-out my-4"
+        className="relative z-10 w-full max-w-md bg-[#0a0f1d]/85 border border-[#00f0ff]/30 rounded-3xl p-6 sm:p-8 backdrop-blur-2xl transition-transform duration-200 ease-out my-4 overflow-hidden"
       >
-        {/* Shimmer Border Overlay */}
-        <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent pointer-events-none -z-10" />
+        {/* Animated Neon Gradient Border Beam Effect */}
+        <div
+          className="absolute -inset-[2px] rounded-3xl opacity-40 pointer-events-none -z-10 blur-sm"
+          style={{
+            background: 'linear-gradient(135deg, #00f0ff 0%, #a855f7 50%, #00ff9d 100%)'
+          }}
+        />
 
-        <div style={{ transform: 'translateZ(30px)' }}>
-          {/* Logo & Header */}
-          <div className="flex flex-col items-center text-center mb-5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/25 mb-2.5 border border-white/10">
-              <span className="text-xl font-black text-white tracking-tighter">Dx</span>
+        {/* Inner Glass Highlight */}
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 via-transparent to-transparent pointer-events-none" />
+
+        <div style={{ transform: 'translateZ(35px)' }} className="relative z-20">
+          {/* Logo & High-Tech Neon Header */}
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="relative mb-3 group">
+              {/* Outer Neon Glow Ring */}
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#00f0ff] via-[#a855f7] to-[#00ff9d] opacity-75 blur-md group-hover:opacity-100 transition-opacity animate-pulse" />
+              <div className="relative w-14 h-14 rounded-2xl bg-[#080d1a] border border-[#00f0ff]/50 flex items-center justify-center shadow-[0_0_20px_rgba(0,240,255,0.4)]">
+                <span className="text-2xl font-black bg-gradient-to-tr from-[#00f0ff] via-[#e0e7ff] to-[#a855f7] bg-clip-text text-transparent tracking-tighter">
+                  Dx
+                </span>
+              </div>
             </div>
+
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold tracking-tight text-white">DeployX</h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-400 font-mono font-medium">
-                v1.0
+              <h1 className="text-2xl font-extrabold tracking-tight text-white drop-shadow-[0_0_12px_rgba(0,240,255,0.5)]">
+                DeployX
+              </h1>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#00f0ff]/15 border border-[#00f0ff]/40 text-[#00f0ff] font-mono font-bold tracking-wider shadow-[0_0_10px_rgba(0,240,255,0.3)]">
+                AI HUB
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Autonomous Software Engineering &amp; Web Deployment Platform
+            <p className="text-xs text-slate-300 mt-1.5 font-medium tracking-wide">
+              Autonomous Intelligence &amp; Cloud Deployment
             </p>
           </div>
 
-          {/* Toggle Tab: Sign Up vs Log In */}
-          <div className="grid grid-cols-2 p-1 bg-[#212121] rounded-2xl border border-white/5 mb-5 text-xs font-semibold">
+          {/* Futuristic Neon Mode Toggle: Sign Up vs Log In */}
+          <div className="grid grid-cols-2 p-1 bg-[#060a14]/90 rounded-2xl border border-[#00f0ff]/20 mb-5 text-xs font-bold shadow-inner">
             <button
               type="button"
               onClick={() => {
@@ -382,13 +439,13 @@ export function AuthPortal() {
                 setSuccessMsg(null);
                 setSignupStep(1);
               }}
-              className={`py-2 rounded-xl transition-all ${
+              className={`py-2.5 rounded-xl transition-all duration-300 ${
                 mode === 'signup'
-                  ? 'bg-[#2f2f2f] text-white shadow-md'
+                  ? 'bg-gradient-to-r from-[#00f0ff]/25 to-[#a855f7]/30 text-white border border-[#00f0ff]/50 shadow-[0_0_15px_rgba(0,240,255,0.35)]'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Sign Up (New User)
+              Sign Up (New)
             </button>
             <button
               type="button"
@@ -397,9 +454,9 @@ export function AuthPortal() {
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className={`py-2 rounded-xl transition-all ${
+              className={`py-2.5 rounded-xl transition-all duration-300 ${
                 mode === 'login'
-                  ? 'bg-[#2f2f2f] text-white shadow-md'
+                  ? 'bg-gradient-to-r from-[#00f0ff]/25 to-[#a855f7]/30 text-white border border-[#00f0ff]/50 shadow-[0_0_15px_rgba(0,240,255,0.35)]'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -407,18 +464,18 @@ export function AuthPortal() {
             </button>
           </div>
 
-          {/* Alert / Status Messages */}
+          {/* Neon Alert / Status Messages */}
           {errorMsg && (
-            <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-start gap-2 animate-in fade-in">
+            <div className="mb-4 p-3.5 bg-rose-500/15 border border-rose-500/40 text-rose-200 rounded-2xl text-xs flex items-start gap-2.5 shadow-[0_0_15px_rgba(244,63,94,0.2)] animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-              <span className="leading-relaxed">{errorMsg}</span>
+              <span className="leading-relaxed font-medium">{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-start gap-2 animate-in fade-in">
+            <div className="mb-4 p-3.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 rounded-2xl text-xs flex items-start gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.25)] animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <span>{successMsg}</span>
+              <span className="font-medium">{successMsg}</span>
             </div>
           )}
 
@@ -427,21 +484,39 @@ export function AuthPortal() {
           {/* ============================================================== */}
           {mode === 'signup' && (
             <div>
-              {/* Step Progress Tracker */}
+              {/* Neon Step Progress Tracker */}
               <div className="flex items-center justify-between mb-5 px-1">
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 1 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>1</span>
-                  <span className={signupStep === 1 ? 'text-white' : ''}>Details</span>
+                <div className="flex items-center space-x-1.5 text-[11px] font-bold text-slate-300">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-all ${
+                    signupStep >= 1
+                      ? 'bg-[#00f0ff] text-black shadow-[0_0_10px_#00f0ff]'
+                      : 'bg-[#151c2e] text-slate-500'
+                  }`}>
+                    1
+                  </span>
+                  <span className={signupStep === 1 ? 'text-[#00f0ff]' : ''}>Details</span>
                 </div>
-                <div className="w-8 h-[1px] bg-white/10" />
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 2 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>2</span>
-                  <span className={signupStep === 2 ? 'text-white' : ''}>OTP</span>
+                <div className="w-8 h-[2px] bg-gradient-to-r from-[#00f0ff]/40 to-[#a855f7]/40" />
+                <div className="flex items-center space-x-1.5 text-[11px] font-bold text-slate-300">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-all ${
+                    signupStep >= 2
+                      ? 'bg-[#a855f7] text-white shadow-[0_0_10px_#a855f7]'
+                      : 'bg-[#151c2e] text-slate-500'
+                  }`}>
+                    2
+                  </span>
+                  <span className={signupStep === 2 ? 'text-[#a855f7]' : ''}>OTP</span>
                 </div>
-                <div className="w-8 h-[1px] bg-white/10" />
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-400">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${signupStep >= 3 ? 'bg-brand-600 text-white' : 'bg-[#262626] text-slate-500'}`}>3</span>
-                  <span className={signupStep === 3 ? 'text-white' : ''}>Password</span>
+                <div className="w-8 h-[2px] bg-gradient-to-r from-[#a855f7]/40 to-[#00ff9d]/40" />
+                <div className="flex items-center space-x-1.5 text-[11px] font-bold text-slate-300">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-all ${
+                    signupStep >= 3
+                      ? 'bg-[#00ff9d] text-black shadow-[0_0_10px_#00ff9d]'
+                      : 'bg-[#151c2e] text-slate-500'
+                  }`}>
+                    3
+                  </span>
+                  <span className={signupStep === 3 ? 'text-[#00ff9d]' : ''}>Password</span>
                 </div>
               </div>
 
@@ -449,45 +524,41 @@ export function AuthPortal() {
               {signupStep === 1 && (
                 <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Full Name
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#00f0ff]" />
+                      <span>Full Name</span>
                     </label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Vivek Akula"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Vivek Akula"
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#070b16] border border-[#00f0ff]/25 text-white placeholder:text-slate-500 text-xs focus:border-[#00f0ff] focus:ring-2 focus:ring-[#00f0ff]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Email Address
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-[#00f0ff]" />
+                      <span>Email Address</span>
                     </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="yourname@gmail.com"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="yourname@gmail.com"
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#070b16] border border-[#00f0ff]/25 text-white placeholder:text-slate-500 text-xs focus:border-[#00f0ff] focus:ring-2 focus:ring-[#00f0ff]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                    />
                   </div>
 
                   <button
                     type="submit"
                     disabled={isLoading || !name.trim() || !email.trim()}
-                    className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+                    className="w-full mt-2 py-3 bg-gradient-to-r from-[#00f0ff] via-[#6366f1] to-[#a855f7] hover:brightness-110 disabled:opacity-40 text-black font-extrabold rounded-xl text-xs shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all flex items-center justify-center space-x-1.5 active:scale-[0.98]"
                   >
-                    <span>{isLoading ? 'Sending Verification OTP...' : 'Verify Email with OTP'}</span>
+                    <span>{isLoading ? 'Dispatching Verification OTP...' : 'Send Verification OTP'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </form>
@@ -496,26 +567,29 @@ export function AuthPortal() {
               {/* STAGE 2: 6-Digit Email Verification Code */}
               {signupStep === 2 && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <div className="p-3 bg-[#212121] rounded-2xl border border-white/10 text-xs">
-                    <span className="text-slate-400">Verifying address:</span>
-                    <div className="font-semibold text-white mt-0.5">{email}</div>
+                  <div className="p-3 bg-[#080d1c] rounded-2xl border border-[#00f0ff]/20 text-xs flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 text-[11px]">Verifying account:</span>
+                      <div className="font-bold text-[#00f0ff]">{email}</div>
+                    </div>
+                    <ShieldCheck className="w-5 h-5 text-[#00ff9d]" />
                   </div>
 
-                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex items-start space-x-3 text-xs">
-                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <div className="p-3.5 bg-[#00ff9d]/10 border border-[#00ff9d]/30 rounded-2xl flex items-start space-x-3 text-xs shadow-[0_0_15px_rgba(0,255,157,0.15)]">
+                    <div className="w-6 h-6 rounded-lg bg-[#00ff9d]/20 text-[#00ff9d] flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Mail className="w-3.5 h-3.5" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="font-semibold text-emerald-300">Verification Code Dispatched</p>
+                      <p className="font-bold text-[#00ff9d]">Verification Code Dispatched</p>
                       <p className="text-[11px] text-slate-300 leading-relaxed">
-                        We sent a 6-digit confirmation code to <strong className="text-white">{email}</strong>. Please check your inbox and spam folder.
+                        We dispatched a 6-digit confirmation code to <strong className="text-white">{email}</strong>. Check your inbox &amp; spam folder.
                       </p>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Enter 6-Digit Verification Code
+                      Enter 6-Digit Code
                     </label>
                     <input
                       type="text"
@@ -525,19 +599,19 @@ export function AuthPortal() {
                       placeholder="• • • • • •"
                       required
                       autoFocus
-                      className="w-full py-3 text-center font-mono text-2xl tracking-[0.5em] rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 outline-none"
+                      className="w-full py-3.5 text-center font-mono text-2xl tracking-[0.5em] rounded-xl bg-[#070b16] border border-[#00f0ff]/40 text-[#00f0ff] placeholder:text-slate-600 focus:ring-2 focus:ring-[#00f0ff] outline-none shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span>
-                      Expires in: <strong className="text-white">{formatTimer(timerSeconds)}</strong>
+                      Expires in: <strong className="text-[#00f0ff] font-mono">{formatTimer(timerSeconds)}</strong>
                     </span>
                     <button
                       type="button"
                       disabled={resendCooldown > 0 || isLoading}
                       onClick={handleResendOtp}
-                      className="text-brand-400 hover:text-brand-300 disabled:opacity-40 font-semibold transition-colors"
+                      className="text-[#a855f7] hover:text-[#d946ef] disabled:opacity-40 font-bold transition-colors"
                     >
                       {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
                     </button>
@@ -547,17 +621,17 @@ export function AuthPortal() {
                     <button
                       type="button"
                       onClick={() => setSignupStep(1)}
-                      className="w-1/3 py-2.5 bg-[#212121] hover:bg-[#2a2a2a] text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                      className="w-1/3 py-2.5 bg-[#151c2e] hover:bg-[#1f2942] text-slate-300 rounded-xl text-xs font-semibold transition-colors"
                     >
                       Back
                     </button>
                     <button
                       type="submit"
                       disabled={isLoading || otpCode.length !== 6 || timerSeconds <= 0}
-                      className="w-2/3 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+                      className="w-2/3 py-2.5 bg-gradient-to-r from-[#00f0ff] to-[#00ff9d] hover:brightness-110 disabled:opacity-40 text-black font-extrabold rounded-xl text-xs shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all flex items-center justify-center space-x-1.5 active:scale-[0.98]"
                     >
                       <span>{isLoading ? 'Verifying...' : 'Verify OTP'}</span>
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
                     </button>
                   </div>
                 </form>
@@ -567,23 +641,23 @@ export function AuthPortal() {
               {signupStep === 3 && (
                 <form onSubmit={handleCompleteSignup} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Create Password
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#00f0ff]" />
+                      <span>Create Strong Password</span>
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Create a strong password"
+                        placeholder="Create strong password"
                         required
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                        className="w-full px-4 pr-10 py-2.5 rounded-xl bg-[#070b16] border border-[#00f0ff]/25 text-white placeholder:text-slate-500 text-xs focus:border-[#00f0ff] focus:ring-2 focus:ring-[#00f0ff]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -591,41 +665,39 @@ export function AuthPortal() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Confirm Password
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#a855f7]" />
+                      <span>Confirm Password</span>
                     </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter your password"
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                      />
-                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#070b16] border border-[#a855f7]/30 text-white placeholder:text-slate-500 text-xs focus:border-[#a855f7] focus:ring-2 focus:ring-[#a855f7]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                    />
                   </div>
 
-                  {/* Password Requirement Checklist */}
+                  {/* Password Requirement Checklist with Neon Checkmarks */}
                   {password.length > 0 && (
-                    <div className="p-2.5 bg-[#212121] rounded-xl border border-white/5 space-y-1 text-[11px]">
+                    <div className="p-3 bg-[#080d1c] rounded-xl border border-white/10 space-y-1.5 text-[11px]">
                       <div className="grid grid-cols-2 gap-1 text-[10px]">
-                        <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        <span className={`flex items-center space-x-1 ${hasMinLength ? 'text-[#00ff9d]' : 'text-slate-500'}`}>
                           <span>{hasMinLength ? '✓' : '•'} 8+ characters</span>
                         </span>
-                        <span className={`flex items-center space-x-1 ${hasUpper ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        <span className={`flex items-center space-x-1 ${hasUpper ? 'text-[#00ff9d]' : 'text-slate-500'}`}>
                           <span>{hasUpper ? '✓' : '•'} 1 uppercase (A-Z)</span>
                         </span>
-                        <span className={`flex items-center space-x-1 ${hasLower ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        <span className={`flex items-center space-x-1 ${hasLower ? 'text-[#00ff9d]' : 'text-slate-500'}`}>
                           <span>{hasLower ? '✓' : '•'} 1 lowercase (a-z)</span>
                         </span>
-                        <span className={`flex items-center space-x-1 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        <span className={`flex items-center space-x-1 ${hasNumber ? 'text-[#00ff9d]' : 'text-slate-500'}`}>
                           <span>{hasNumber ? '✓' : '•'} 1 number (0-9)</span>
                         </span>
                       </div>
                       {confirmPassword.length > 0 && (
-                        <div className={`pt-1 text-[10px] font-semibold ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <div className={`pt-1 text-[10px] font-bold ${passwordsMatch ? 'text-[#00ff9d]' : 'text-rose-400'}`}>
                           {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
                         </div>
                       )}
@@ -635,9 +707,9 @@ export function AuthPortal() {
                   <button
                     type="submit"
                     disabled={isLoading || !isPasswordValid}
-                    className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+                    className="w-full mt-2 py-3 bg-gradient-to-r from-[#00f0ff] via-[#a855f7] to-[#00ff9d] hover:brightness-110 disabled:opacity-40 text-black font-extrabold rounded-xl text-xs shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all flex items-center justify-center space-x-1.5 active:scale-[0.98]"
                   >
-                    <span>{isLoading ? 'Creating Account...' : 'Create Account & Log In'}</span>
+                    <span>{isLoading ? 'Creating Account...' : 'Complete & Enter Workspace'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </form>
@@ -646,45 +718,43 @@ export function AuthPortal() {
           )}
 
           {/* ============================================================== */}
-          {/* LOGIN FLOW (JUST EMAIL & PASSWORD, EXACTLY AS REQUESTED)       */}
+          {/* LOGIN FLOW (JUST EMAIL & PASSWORD)                             */}
           {/* ============================================================== */}
           {mode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Email Address
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#00f0ff]" />
+                  <span>Email Address</span>
                 </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    required
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                  />
-                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#070b16] border border-[#00f0ff]/25 text-white placeholder:text-slate-500 text-xs focus:border-[#00f0ff] focus:ring-2 focus:ring-[#00f0ff]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Password
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#a855f7]" />
+                  <span>Password</span>
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your account password"
                     required
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#212121] border border-white/10 text-white placeholder:text-slate-500 text-xs focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                    className="w-full px-4 pr-10 py-2.5 rounded-xl bg-[#070b16] border border-[#a855f7]/30 text-white placeholder:text-slate-500 text-xs focus:border-[#a855f7] focus:ring-2 focus:ring-[#a855f7]/40 outline-none transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -694,16 +764,16 @@ export function AuthPortal() {
               <button
                 type="submit"
                 disabled={isLoading || !email.trim() || !password}
-                className="w-full mt-2 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center space-x-1.5"
+                className="w-full mt-2 py-3 bg-gradient-to-r from-[#00f0ff] via-[#6366f1] to-[#a855f7] hover:brightness-110 disabled:opacity-40 text-black font-extrabold rounded-xl text-xs shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all flex items-center justify-center space-x-1.5 active:scale-[0.98]"
               >
                 <span>{isLoading ? 'Signing In...' : 'Log In to DeployX'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </form>
           )}
 
-          {/* Footer note */}
-          <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-center text-[11px] text-slate-500">
+          {/* Footer toggle note */}
+          <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-center text-[11px] text-slate-400">
             <span>
               {mode === 'signup' ? (
                 <>
@@ -715,7 +785,7 @@ export function AuthPortal() {
                       setErrorMsg(null);
                       setSuccessMsg(null);
                     }}
-                    className="text-brand-400 hover:text-brand-300 font-semibold"
+                    className="text-[#00f0ff] hover:text-white font-bold ml-1 transition-colors underline-offset-2 hover:underline"
                   >
                     Log in here
                   </button>
@@ -731,7 +801,7 @@ export function AuthPortal() {
                       setSuccessMsg(null);
                       setSignupStep(1);
                     }}
-                    className="text-brand-400 hover:text-brand-300 font-semibold"
+                    className="text-[#00f0ff] hover:text-white font-bold ml-1 transition-colors underline-offset-2 hover:underline"
                   >
                     Create one now
                   </button>
